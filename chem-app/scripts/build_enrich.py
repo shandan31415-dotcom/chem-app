@@ -5,6 +5,7 @@
 import json
 import os
 import sys
+import time
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
@@ -82,7 +83,8 @@ def build_parks():
             c.setdefault("enterprises", []).append(to_ent(t))
             exists.add(t[0])
 
-    # 4) 统计与署名
+    # 4) 统计与署名（PRD 7.2：每个数据文件都必须带 updated_at）
+    d["updated_at"] = int(time.time())
     d["updated_at_text"] = "2026-10-21"
     d["source"] = "人工整理 + 资料库《山东化工产业地图》《化工品种速查手册》"
     d["note"] = ("以地市为单位的化工产业与企业整理，不限高端化工，覆盖全省化工主要企业。" 
@@ -177,6 +179,7 @@ def build_cats():
             flat.append(items[cid])
     d["groups"] = groups
     d["items"] = flat
+    d["updated_at"] = int(time.time())
     d["updated_at_text"] = "2026-10-21"
     d["note"] = ("品类知识为人工整理，品种口径参考资料库《化工品种速查手册》，"
                  "行业变化快，发现出入请指出，我改。")

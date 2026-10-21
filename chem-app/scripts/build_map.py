@@ -3,7 +3,7 @@
 投影：等距圆柱 + 纬度余弦修正（省内范围足够准确），y 轴翻转。
 简化：Douglas-Peucker，容差按画布尺寸调，去掉海上小岛噪点。
 """
-import json, math, os
+import json, math, os, time
 
 SRC = os.path.join(os.path.dirname(__file__), "sd_raw.json")
 OUT = os.path.join(os.path.dirname(__file__), "..", "data", "sdmap.json")
@@ -134,7 +134,8 @@ def dp(pts, tol):
     return [p for p, kp in zip(pts, keep) if kp]
 
 
-out = {"viewBox": "0 0 %.1f %.1f" % (W, H), "w": round(W, 1), "h": round(H, 1), "cities": {}}
+out = {"viewBox": "0 0 %.1f %.1f" % (W, H), "w": round(W, 1), "h": round(H, 1),
+       "updated_at": int(time.time()), "cities": {}}
 
 for f in feats:
     p = f["properties"]
