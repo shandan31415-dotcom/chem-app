@@ -95,6 +95,26 @@ class CDP:
         self.ws = websocket.create_connection(ws_url, timeout=30)
         self.i = 0
         self.pending = {}
+        # 原生对话框（confirm/alert/prompt）：不接住会把渲染进程挂死，
+        # 导致 Runtime.evaluate 一直等不到返回 → 测试表现为 websocket 超时。
+        self.dialogs = []          # [{"type":..,"message":..}]
+        self.dialog_policy = True  # True=自动点确定 / False=自动取消 / None=不处理
+        self._mute = set()
+
+    def _event(self, msg):
+        """处理 CDP 事件（无 id 的消息）"""
+        if msg.get("method") != "Page.javascriptDialogOpening":
+            return
+        p = msg.get("params", {})
+        self.dialogs.append({"type": p.get("type"), "message": p.get("message", "")})
+        if self.dialog_policy is None:
+            return
+        self.i += 1
+        rid = self.i
+        self._mute.add(rid)   # 这条命令的响应自己吞掉，别污染主调用
+        self.ws.send(json.dumps({
+            "id": rid, "method": "Page.handleJavaScriptDialog",
+            "params": {"accept": bool(self.dialog_policy)}}))
 
     def send(self, method, **params):
         self.i += 1
@@ -102,11 +122,13 @@ class CDP:
         self.ws.send(json.dumps({"id": mid, "method": method, "params": params}))
         while True:
             msg = json.loads(self.ws.recv())
-            if msg.get("id") == mid:
-                if "error" in msg:
-                    raise RuntimeError("%s -> %s" % (method, msg["error"]))
-                return msg.get("result", {})
-            # 其它事件丢弃
+            if "id" in msg:
+                if msg["id"] == mid:
+                    if "error" in msg:
+                        raise RuntimeError("%s -> %s" % (method, msg["error"]))
+                    return msg.get("result", {})
+                continue          # 内部命令的响应，忽略
+            self._event(msg)
 
     def eval(self, expr, timeout=20):
         r = self.send("Runtime.evaluate", expression=expr, returnByValue=True,
@@ -253,6 +275,17 @@ class Browser:
     def offline(self, on=True):
         self.cdp.send("Network.emulateNetworkConditions", offline=on,
                       latency=0, downloadThroughput=0, uploadThroughput=0)
+
+    # ---------------- 原生对话框 ----------------
+    def accept_dialogs(self, accept=True):
+        """设成 True 等于用户点「确定」，False 等于点「取消」"""
+        self.cdp.dialog_policy = accept
+
+    def clear_dialogs(self):
+        del self.cdp.dialogs[:]
+
+    def last_dialog(self):
+        return self.cdp.dialogs[-1]["message"] if self.cdp.dialogs else ""
 
     def close(self):
         if self.cdp:

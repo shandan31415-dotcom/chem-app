@@ -22,15 +22,73 @@
 
   /* ------------------------------------------------ 本地存储 */
   var KEY = "chemapp.v1";
+  var SNAP = "chemapp.snaps";
+  var SNAP_KEEP = 4;                 // 本地快照保留份数（PRD 7.3-3）
+  var WEEK = 7 * 86400000;
   var S = { fav: [], read: [], learned: [], lastOpen: 0, seen: {} };
+
   function storeLoad() {
-    try { var s = JSON.parse(localStorage.getItem(KEY) || "null"); if (s) S = Object.assign(S, s); } catch (e) {}
+    try {
+      var s = JSON.parse(localStorage.getItem(KEY) || "null");
+      if (s) S = Object.assign(S, s);
+    } catch (e) {}
+    if (!S.seen || typeof S.seen !== "object") S.seen = {};
     S.lastOpen = Date.now();
+    snapMaybe();
     storeSave();
   }
   function storeSave() { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) {} }
   function has(a, v) { return a.indexOf(v) >= 0; }
   function toggle(a, v) { var i = a.indexOf(v); if (i >= 0) a.splice(i, 1); else a.push(v); storeSave(); }
+
+  /* ---- 每周本地快照：环形保留 4 份，误操作可回退（PRD 7.3-3） ---- */
+  function snapsGet() {
+    try { return JSON.parse(localStorage.getItem(SNAP) || "[]"); } catch (e) { return []; }
+  }
+  function snapsPut(arr) {
+    try { localStorage.setItem(SNAP, JSON.stringify(arr)); return true; } catch (e) { return false; }
+  }
+  function snapTake() {
+    return JSON.parse(JSON.stringify({
+      learned: S.learned, read: S.read, fav: S.fav, seen: S.seen
+    }));
+  }
+  function snapMaybe(force) {
+    var arr = snapsGet();
+    var last = arr.length ? arr[arr.length - 1].ts : 0;
+    if (!force && Date.now() - last < WEEK) return arr;
+    arr.push({ ts: Date.now(), data: snapTake() });
+    while (arr.length > SNAP_KEEP) arr.shift();
+    if (!snapsPut(arr)) arr.pop();   // 存不下就放弃这次快照，不影响主流程
+    return arr;
+  }
+  function snapRestore(i) {
+    var arr = snapsGet();
+    var s = arr[i];
+    if (!s) return null;
+    return applyRestore(s.data);
+  }
+
+  /* ---- 合并式恢复：已有的保留，缺的补上（PRD 7.3-2） ---- */
+  function applyRestore(o) {
+    var r = { learned: 0, learnedExist: 0, read: 0, readExist: 0, fav: 0, favExist: 0 };
+    function add(arr, v, hit, miss) {
+      if (arr.indexOf(v) >= 0) { r[miss]++; } else { arr.push(v); r[hit]++; }
+    }
+    (o.learned || []).forEach(function (v) { add(S.learned, v, "learned", "learnedExist"); });
+    (o.read || []).forEach(function (v) { add(S.read, v, "read", "readExist"); });
+    (o.fav || []).forEach(function (v) { add(S.fav, v, "fav", "favExist"); });
+    if (o.seen && typeof o.seen === "object") {
+      Object.keys(o.seen).forEach(function (k) { if (!S.seen[k]) S.seen[k] = o.seen[k]; });
+    }
+    storeSave();
+    return r;
+  }
+  function restoreText(r) {
+    return "新增品类 " + r.learned + " / 已存在 " + r.learnedExist +
+      "；新增已读 " + r.read + " / 已存在 " + r.readExist +
+      "；新增收藏 " + r.fav + " / 已存在 " + r.favExist;
+  }
 
   /* ------------------------------------------------ 工具 */
   function esc(s) {
@@ -403,6 +461,7 @@
       '<div class="bar"><i style="width:' + (total ? Math.round(lr / total * 100) : 0) + '%"></i></div>' +
       '<div class="lbl"><span>已读政策</span><span>' + polRead + ' / ' + polTotal + ' 条</span></div>' +
       '<div class="bar"><i style="width:' + (polTotal ? Math.round(polRead / polTotal * 100) : 0) + '%"></i></div>' +
+      '<a class="morelink" href="#/me">我的数据 · 导出 / 导入备份 ›</a>' +
       '</div></div>';
 
     app.innerHTML = h;
@@ -1305,66 +1364,150 @@
     app.innerHTML = h;
   }
 
-  /* ------------------------------------------------ 我的 */
+  /* ------------------------------------------------ 我的（本地数据 / 备份） */
+  var EXPORT_V = 1;
+
   function viewMe() {
     setHeader("我的数据", { back: true });
-    var h = '<div class="sec-title">本机记录</div><div class="card">' +
-      '<div class="kv"><span class="k">已学品类</span><span class="v">' + S.learned.length + '</span></div>' +
-      '<div class="kv"><span class="k">已读政策</span><span class="v">' + S.read.length + '</span></div>' +
+    var arr = snapsGet();
+    var h = '';
+
+    h += '<div class="sec-title">本机记录</div><div class="card">' +
+      '<div class="kv"><span class="k">已学品类</span><span class="v">' + S.learned.length +
+      (D.cats ? ' / ' + D.cats.items.length : '') + '</span></div>' +
+      '<div class="kv"><span class="k">已读政策</span><span class="v">' +
+      S.read.filter(function (k) { return String(k).indexOf("pol:") === 0; }).length +
+      (D.policies ? ' / ' + D.policies.items.length : '') + '</span></div>' +
       '<div class="kv"><span class="k">收藏</span><span class="v">' + S.fav.length + '</span></div>' +
       '</div>';
+
     h += '<div class="card"><div class="btnrow">' +
       '<button class="btn pri" id="exp">导出我的数据</button>' +
       '<button class="btn" id="imp">导入恢复</button>' +
-      '</div><div class="hint">导出得到一份 json 文件，换手机或清缓存后导入即可恢复' +
-      '已学、已读、收藏。内容数据（资讯、行情、园区）不用备份，重新加载即可。</div></div>';
+      '</div>' +
+      '<input id="impFile" type="file" accept=".json,application/json" hidden>' +
+      '<div id="impinfo"></div>' +
+      '<div class="hint">导出得到一个纯文本 json（含 learned / read / fav 三个字段），' +
+      '换手机或清缓存后导入即可恢复。导入是<b>合并</b>，不会用旧备份冲掉新记录。</div></div>';
+
+    h += '<div class="sec-title">本机快照 <span class="subtle">每周自动存一份，留最近 ' +
+      SNAP_KEEP + ' 份</span></div>';
+    if (!arr.length) {
+      h += '<div class="card"><div class="empty" style="padding:24px 20px">还没有快照<br>' +
+        '<span style="font-size:12px">第一次打开 App 时开始计时，满一周自动存一份</span></div></div>';
+    } else {
+      h += '<div class="card">';
+      arr.slice().reverse().forEach(function (s, k) {
+        var idx = arr.length - 1 - k;
+        h += '<div class="row"><div class="main">' +
+          '<div class="rt">' + esc(dateTime(s.ts)) + '</div>' +
+          '<div class="rm"><span>品类 ' + ((s.data && s.data.learned) || []).length + '</span>' +
+          '<span>已读 ' + ((s.data && s.data.read) || []).length + '</span>' +
+          '<span>收藏 ' + ((s.data && s.data.fav) || []).length + '</span></div></div>' +
+          '<button class="btn sm" data-snap="' + idx + '">恢复</button></div>';
+      });
+      h += '</div>';
+    }
+
+    h += '<div class="card"><div class="btnrow"><button class="btn" id="snapnow">立即存一份快照</button></div>' +
+      '<div class="hint">每周自动存，也可以手动存一份再做大改动。</div></div>';
+
     h += '<div class="card"><div class="btnrow"><button class="btn" id="clear">清空本机记录</button></div>' +
       '<div class="hint">只看资讯和行情的话，这些记录不影响任何内容。清空后学习进度归零。</div></div>';
-    h += '<div class="hint">离线缓存不是备份：App 里能看到的内容会被系统清理，' +
-      '真正属于你的只有上面三项，请定期导出。</div>';
+
+    h += '<div class="hint">离线缓存不是备份：App 断网时还能看到上次的内容，那是缓存，' +
+      '系统清理缓存或重装就没了。<b>真正属于你的只有已学 / 已读 / 收藏三项</b>，请定期导出。</div>' +
+      '<div class="hint">内容数据（资讯、行情、园区、品类、政策）不用备份，下次更新自动覆盖；' +
+      '数据整理日期：' + esc((D.meta && D.meta.updated_at_text) || "") + '</div>';
+
     app.innerHTML = h;
 
     $("exp").onclick = function () {
-      var blob = new Blob([JSON.stringify(S, null, 2)], { type: "application/json" });
-      var a = document.createElement("a");
-      var d = new Date();
-      a.href = URL.createObjectURL(blob);
-      a.download = "高端化工-我的数据-" + dateStr(d / 1000) + ".json";
-      a.click();
-    };
-    $("imp").onclick = function () {
-      var inp = document.createElement("input");
-      inp.type = "file"; inp.accept = ".json,application/json";
-      inp.onchange = function () {
-        var f = inp.files && inp.files[0];
-        if (!f) return;
-        var fr = new FileReader();
-        fr.onload = function () {
-          try {
-            var o = JSON.parse(fr.result);
-            if (!o || typeof o !== "object") throw new Error("格式不对");
-            var add = function (arr, v) { if (arr.indexOf(v) < 0) arr.push(v); };
-            (o.learned || []).forEach(function (v) { add(S.learned, v); });
-            (o.read || []).forEach(function (v) { add(S.read, v); });
-            (o.fav || []).forEach(function (v) { add(S.fav, v); });
-            storeSave();
-            alert("恢复完成：品类 " + S.learned.length + " · 政策 " + S.read.length + " · 收藏 " + S.fav.length);
-            viewMe();
-          } catch (e) { alert("导入失败：" + e.message); }
-        };
-        fr.readAsText(f);
+      var payload = {
+        v: EXPORT_V, app: "chem-app", exported_at: new Date().toISOString(),
+        learned: S.learned, read: S.read, fav: S.fav, seen: S.seen
       };
-      inp.click();
+      var text = JSON.stringify(payload, null, 2);
+      window.__lastExport = text;   // 便于自测核对文件内容，不影响用户
+      var blob = new Blob([text], { type: "application/json" });
+      var a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = "高端化工-我的数据-" + dateStr(Date.now() / 1000) + ".json";
+      a.click();
+      setTimeout(function () { URL.revokeObjectURL(a.href); }, 3000);
+      var box = $("impinfo");
+      if (box) box.innerHTML = '<div class="hint ok">已导出：品类 ' + S.learned.length +
+        ' · 已读 ' + S.read.length + ' · 收藏 ' + S.fav.length + '（文件名带日期）</div>';
     };
+
+    $("imp").onclick = function () { $("impFile").click(); };
+
+    $("impFile").onchange = function () {
+      var f = this.files && this.files[0];
+      if (!f) return;
+      var fr = new FileReader();
+      fr.onload = function () {
+        var o;
+        try {
+          o = JSON.parse(fr.result);
+          if (!o || typeof o !== "object") throw new Error("不是合法的 json 对象");
+        } catch (e) {
+          $("impinfo").innerHTML = '<div class="hint err">导入失败：文件不是可读的 json（' +
+            esc(e.message) + '）</div>';
+          return;
+        }
+        if (String(o.v) !== String(EXPORT_V)) {
+          var msg = "版本不一致（文件 v=" + (o.v === undefined ? "无" : o.v) + "，本机 v=" +
+            EXPORT_V + "），仍要导入吗？";
+          if (!confirm(msg)) {
+            $("impinfo").innerHTML = '<div class="hint">已取消导入（版本不一致，你没有确认）。</div>';
+            return;
+          }
+        }
+        var r = applyRestore(o);
+        viewMe();
+        $("impinfo").innerHTML = '<div class="hint ok">恢复完成：' + esc(restoreText(r)) + '</div>';
+      };
+      fr.readAsText(f);
+    };
+
+    $("snapnow").onclick = function () { snapMaybe(true); viewMe(); };
+
+    Array.prototype.forEach.call(app.querySelectorAll("[data-snap]"), function (b) {
+      b.onclick = function () {
+        var i = parseInt(b.dataset.snap, 10);
+        var s = snapsGet()[i];
+        if (!s) return;
+        if (!confirm("用 " + dateTime(s.ts) + " 的快照恢复？会合并进当前记录，不会删掉现有内容。")) return;
+        var r = snapRestore(i);
+        viewMe();
+        $("impinfo").innerHTML = '<div class="hint ok">已从快照恢复：' + esc(restoreText(r)) + '</div>';
+      };
+    });
+
     $("clear").onclick = function () {
       if (!confirm("确定清空本机的已学、已读、收藏？此操作不可恢复。")) return;
-      S.learned = []; S.read = []; S.fav = []; storeSave(); viewMe();
+      S.learned = []; S.read = []; S.fav = []; S.seen = {};
+      storeSave(); viewMe();
     };
+  }
+
+  function dateTime(ts) {
+    var d = new Date(ts);
+    return d.getFullYear() + "-" + ("0" + (d.getMonth() + 1)).slice(-2) + "-" +
+      ("0" + d.getDate()).slice(-2) + " " + ("0" + d.getHours()).slice(-2) + ":" +
+      ("0" + d.getMinutes()).slice(-2);
   }
 
   /* ------------------------------------------------ 路由 */
   function route() {
-    if (!D.cats && !D.news) return;
+    if (!D.cats && !D.news && !D.prices) {
+      app.innerHTML = '<div class="empty">未能加载数据<br>' +
+        '<span style="font-size:12px">请检查网络，或点右上角 ⟳ 重新加载；' +
+        '已经缓存过的内容在断网时也能打开</span></div>';
+      netUI();
+      return;
+    }
     var p = location.hash.replace(/^#\/?/, "").split("/").filter(Boolean);
     var seg = p[0] || "home";
     if (seg === "home") viewHome();
