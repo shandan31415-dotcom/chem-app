@@ -204,7 +204,12 @@ SD_CHANNEL_DROP = ["工会", "党建", "党委", "文艺", "慰问", "篮球", "
 
 # 明显是卖报告/卖数据的推广稿，不是新闻
 AD_WORDS = ["年度报告目录", "市场年度报告", "预售", "数据包", "定制数据", "项目建议书",
-            "订阅", "征订", "广告"]
+            "订阅", "征订", "广告", "月报", "推荐报告", "评估报告", "年度报告",
+            "产业链价格自我评估"]
+
+# 资讯只留这么多天以内的。企业栏目首页常挂着两三年前的旧稿，
+# 混进「每日三分钟」里就成了误导（App 里企业动态超过 90 天也会灰掉）。
+NEWS_MAX_AGE_DAYS = 45
 # 全国口径词：山东企业栏目里转发的宏观/全国稿，不能算山东本地新闻
 NATIONAL_WORDS = ["我国", "全国", "全球", "国际", "世界", "国家统计局", "海关总署", "工信部",
                   "国家发展改革委", "生态环境部", "中方", "中国石化", "中国石油"]
@@ -312,10 +317,13 @@ KW_CHEM = ["化工", "石化", "化学", "炼化", "乙烯", "丙烯", "聚合�
 CITY_NAMES = ["山东", "济南", "青岛", "淄博", "枣庄", "东营", "烟台", "潍坊", "济宁", "泰安",
               "威海", "日照", "临沂", "德州", "聊城", "滨州", "菏泽"]
 # 山东判定：省属信号词（园区/机构/区域品牌）
-SD_SIGNALS = ["山东省", "省工信厅", "省发改委", "齐鲁", "鲁西", "鲁北", "黄三角",
-              "裕龙", "万华", "齐鲁石化", "东明石化", "利华益", "华鲁恒升", "鲁西化工",
-              "京博", "海科", "富海", "齐翔腾达", "滨化", "东岳", "金诚", "汇丰石化",
-              "亚星化学", "海化集团", "信发", "新龙", "恒通化工", "清源集团"]
+# 区域/省属信号词：出现即算山东。这类词不会误伤，直接子串匹配。
+SD_SIGNALS = ["山东省", "省工信厅", "省发改委", "齐鲁", "鲁西", "鲁北", "黄三角"]
+# 山东头部企业简称：单独一张表，走 ent_in() 的切词边界，
+# 否则「祥海科技」会被「海科」命中，把别人的稿子算成山东本地新闻。
+SD_CO_SIGNALS = ["裕龙", "万华", "齐鲁石化", "东明石化", "利华益", "华鲁恒升", "鲁西化工",
+                 "京博", "海科", "富海", "齐翔腾达", "滨化", "东岳", "金诚", "汇丰石化",
+                 "亚星化学", "海化集团", "信发", "新龙", "恒通化工", "清源集团"]
 # 全球判定：境外主体 / 境外市场相关
 GLOBAL_WORDS = ["全球", "国际", "美国", "欧洲", "欧盟", "欧元区", "日本", "韩国", "中东",
                 "俄罗斯", "东南亚", "海外", "印度", "德国", "沙特", "进口", "出口",
@@ -363,6 +371,8 @@ def is_shandong(title, summary=""):
     if any(c in title for c in CITY_NAMES):
         return True
     if any(s in title for s in SD_SIGNALS):
+        return True
+    if ent_hit(title, SD_CO_SIGNALS):
         return True
     return False
 
@@ -542,6 +552,35 @@ def sd_enterprise_keys():
 
 SD_KEYS = None
 
+# 企业简称做子串匹配时，两字简称最容易误伤：『祥海科技』里含『海科』，
+# 结果海科化工挂上了祥海科技的新闻。这里给两字简称加个切词边界：
+# 简称在开头、或前面不是汉字、或后面紧跟公司后缀，才算命中。
+ENT_SUFFIX = ("化工", "化学", "石化", "集团", "股份", "科技", "新材", "材料", "能源",
+              "实业", "控股", "公司", "有限", "盐化", "化纤", "轮胎", "药业", "新材料")
+_CJK = re.compile(r"[\u4e00-\u9fff]")
+
+
+def ent_in(text, key):
+    """企业简称是否命中标题（带两字简称的切词边界）"""
+    if not key:
+        return False
+    if len(key) >= 3:
+        return key in text
+    start = 0
+    while True:
+        i = text.find(key, start)
+        if i < 0:
+            return False
+        before = text[i - 1] if i > 0 else ""
+        after = text[i + len(key):i + len(key) + 2]
+        if i == 0 or not _CJK.match(before) or after.startswith(ENT_SUFFIX):
+            return True
+        start = i + 1
+
+
+def ent_hit(text, keys):
+    return any(ent_in(text, k) for k in keys)
+
 
 def enrich(items):
     """打标 + 分板块（不做跨源去重，去重由 dedup_cross 负责）"""
@@ -552,7 +591,8 @@ def enrich(items):
     seen, res = set(), []
     for it in items:
         text = (it["title"] + " " + (it.get("summary") or ""))
-        known = (any(k in it["title"] for k in SD_KEYS)
+        known = (ent_hit(it["title"], SD_KEYS)
+                 or ent_hit(it["title"], SD_CO_SIGNALS)
                  or any(k in it["title"] for k in FOREIGN_FIRMS)
                  or any(k in it["title"] for k in SD_SIGNALS))
         if any(w in it["title"] for w in AD_WORDS):
@@ -571,7 +611,7 @@ def enrich(items):
         it["day"] = day_of(it.get("ts"))
         # 归属只看标题本身：地名 / 省属信号词 / 收录企业名。
         # 来源栏目（_sd）只作溯源标记，不参与归属——企业栏目也会转发全国宏观稿。
-        if is_shandong(t) or any(k in t for k in SD_KEYS):
+        if is_shandong(t) or ent_hit(t, SD_KEYS):
             it["block"] = "山东"
         elif it.get("_intl") or any(c in t for c in GLOBAL_WORDS) or any(c in t for c in FOREIGN_FIRMS):
             it["block"] = "全球"
@@ -647,7 +687,30 @@ def fetch_news():
         except Exception as e:  # noqa: BLE001
             print("  [!] 中新网 %s 失败: %s" % (cname, str(e)[:40]))
 
+    raw, stale = drop_stale(raw)
+    if stale:
+        print("     丢弃超过 %d 天的旧稿 %d 条" % (NEWS_MAX_AGE_DAYS, stale))
     return raw
+
+
+def drop_stale(items, max_days=None, now=None):
+    """丢掉太旧的稿子。没有日期的保留——有的源不给日期，不能一刀切删掉。
+
+    返回 (保留的稿件, 丢弃条数)。企业栏目首页常年挂着两三年前的稿子，
+    不筛就会混进「每日三分钟」，比没有更糟。
+    """
+    if max_days is None:
+        max_days = NEWS_MAX_AGE_DAYS
+    if now is None:
+        now = time.time()
+    keep, dropped = [], 0
+    for it in items:
+        ts = it.get("ts")
+        if ts and now - ts > max_days * 86400:
+            dropped += 1
+            continue
+        keep.append(it)
+    return keep, dropped
 
 
 # ---------------------------------------------------------------- 政策

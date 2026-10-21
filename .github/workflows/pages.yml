@@ -1,0 +1,45 @@
+# 发布到 GitHub Pages（chem-app 是仓库子目录，所以用 Actions 把子目录作为站点根发布，
+# 不用动 Settings 里的分支/目录选择，也不用把 App 挪到仓库根）
+#
+# 首次使用：仓库 Settings → Pages → Build and deployment → Source 选 "GitHub Actions"。
+
+name: pages
+
+on:
+  push:
+    branches: [main, master]
+    paths:
+      - "chem-app/**"
+      - ".github/workflows/pages.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: 检出仓库
+        uses: actions/checkout@v4
+
+      - name: 配置 Pages
+        uses: actions/configure-pages@v5
+
+      - name: 打包 chem-app
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: chem-app
+
+      - name: 部署
+        id: deployment
+        uses: actions/deploy-pages@v4

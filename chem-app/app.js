@@ -495,10 +495,17 @@
       UI.block = f ? f.name : blocks[0].name;
     }
     var b = blocks.filter(function (x) { return x.name === UI.block; })[0];
-    var items = (b.items || []).slice();
-    if (UI.q) {
+    var items, searching = !!UI.q;
+    if (searching) {
+      /* 搜索跨三个板块：找一条新闻时不该被「当前在哪个板块」挡住 */
       var q = UI.q.toLowerCase();
-      items = items.filter(function (i) { return i.title.toLowerCase().indexOf(q) >= 0; });
+      items = [];
+      blocks.forEach(function (x) {
+        (x.items || []).forEach(function (i) { items.push({ it: i, blk: x.name }); });
+      });
+      items = items.filter(function (o) { return o.it.title.toLowerCase().indexOf(q) >= 0; });
+    } else {
+      items = (b.items || []).map(function (i) { return { it: i, blk: b.name }; });
     }
 
     var h = '<div class="chips">';
@@ -511,15 +518,24 @@
       '<input id="q" placeholder="搜索资讯关键词" value="' + esc(UI.q) + '" ' +
       'style="width:100%;height:36px;border:1px solid var(--line);border-radius:9px;padding:0 12px;font-size:14px;outline:0;background:#fafbfc"></div></div>';
 
+    if (searching) {
+      h += '<div class="sec-title">搜索结果 <span class="subtle">· ' + items.length +
+        ' 条（三个板块）</span></div>';
+    }
+
     if (!items.length) {
-      h += '<div class="empty">这个板块今天没有收录到高端化工相关内容<br>' +
-        '<span style="font-size:12px">换个板块看看，或点右上角 ⟳ 重新抓取</span></div>';
+      h += searching
+        ? '<div class="empty">没有匹配的资讯<br><span style="font-size:12px">换个词试试，比如「甲醇」「轮胎」「园区」</span></div>'
+        : '<div class="empty">这个板块今天没有收录到高端化工相关内容<br>' +
+          '<span style="font-size:12px">换个板块看看，或点右上角 ⟳ 重新抓取</span></div>';
     } else {
       h += '<div class="card">';
-      items.forEach(function (i) {
+      items.forEach(function (o) {
+        var i = o.it;
         h += '<a class="row" href="' + esc(i.url) + '" target="_blank" rel="noopener">' +
           '<div class="main"><div class="rt">' + esc(i.title) + '</div>' +
           '<div class="rm"><span class="tag">' + esc(i.source || "") + '</span>' +
+          (searching ? '<span class="tag cat">' + esc(o.blk) + '</span>' : '') +
           '<span>' + esc(dayKey(i.ts)) + '</span>' +
           (i.cats && i.cats.length ? '<span class="tag cat">' + esc(i.cats[0]) + '</span>' : '') +
           '</div></div><span class="arrow">›</span></a>';
@@ -919,10 +935,30 @@
     app.innerHTML = h;
   }
 
+  /* 企业简称匹配。两字简称要防「祥海科技」命中「海科」这类切词假阳，
+     规则与 scripts/fetch_all.py 的 ent_in() 保持一致。 */
+  var ENT_SUFFIX = ["化工", "化学", "石化", "集团", "股份", "科技", "新材", "材料",
+    "能源", "实业", "控股", "公司", "有限", "盐化", "化纤", "轮胎", "药业"];
+  function entIn(text, key) {
+    if (!key) return false;
+    if (key.length >= 3) return text.indexOf(key) >= 0;
+    var start = 0;
+    while (true) {
+      var i = text.indexOf(key, start);
+      if (i < 0) return false;
+      var before = i > 0 ? text.charAt(i - 1) : "";
+      var after = text.substr(i + key.length, 2);
+      var cjk = /[\u4e00-\u9fff]/.test(before);
+      var okSuffix = ENT_SUFFIX.some(function (s) { return after.indexOf(s) === 0; });
+      if (i === 0 || !cjk || okSuffix) return true;
+      start = i + 1;
+    }
+  }
+
   function entNews(e) {
     var keys = e.match || [e.name];
     return allNews().filter(function (n) {
-      return keys.some(function (k) { return n.title.indexOf(k) >= 0; });
+      return keys.some(function (k) { return entIn(n.title, k); });
     }).sort(function (a, b) { return (b.ts || 0) - (a.ts || 0); });
   }
 

@@ -1,0 +1,55 @@
+# 每日自动采集：资讯 / 行情 / 政策
+#
+# 只跑 fetch_all.py —— 不要在这里跑 build_enrich.py，
+# 那个脚本写的是人工整理的企业与品类内容，跑一次会把人工修正覆盖掉。
+#
+# 失败策略：抓不到的模块由 fetch_all.py 内部的 save_or_keep 保住旧数据，
+# 单个源挂了不会把 data 清空；qa.py 失败会让这次 Action 变红，提醒有人看。
+
+name: daily-data
+
+on:
+  schedule:
+    # UTC 22:00 == 北京时间次日 06:00
+    - cron: "0 22 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: daily-data
+  cancel-in-progress: false
+
+jobs:
+  fetch:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: chem-app
+    steps:
+      - name: 检出仓库
+        uses: actions/checkout@v4
+
+      - name: 安装 Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: 抓取数据
+        run: python scripts/fetch_all.py
+
+      - name: 提交数据
+        run: |
+          git config user.name "chem-data-bot"
+          git config user.email "chem-data-bot@users.noreply.github.com"
+          git add data
+          if git diff --cached --quiet; then
+            echo "今天没有新数据，跳过提交"
+          else
+            git commit -m "data: $(date -u +%F)"
+            git push
+          fi
+
+      - name: 数据断言
+        run: python scripts/qa.py

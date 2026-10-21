@@ -52,7 +52,11 @@ class Handler(SimpleHTTPRequestHandler):
     def log_message(self, *a):  # 静音
         pass
 
-    def handle_error(self, *a):  # 浏览器退出时的连接重置不算错误
+
+class QuietServer(ThreadingHTTPServer):
+    """浏览器退出时连接被重置是常态，不该刷一屏 traceback"""
+
+    def handle_error(self, request, client_address):
         pass
 
 
@@ -68,7 +72,7 @@ class Server:
     def __init__(self, root=None):
         self.root = root or ROOT
         self.port = free_port()
-        self.httpd = ThreadingHTTPServer(("127.0.0.1", self.port), make_handler(self.root))
+        self.httpd = QuietServer(("127.0.0.1", self.port), make_handler(self.root))
         self.thread = threading.Thread(target=self.httpd.serve_forever, daemon=True)
 
     def __enter__(self):
@@ -354,7 +358,9 @@ class App:
     def goto_hash(self, path):
         h = path if path.startswith("#") else "#" + ("/" + path if path else "")
         self.browser.cdp.eval("location.hash=%s" % json.dumps(h))
-        self.browser.wait_js("location.hash===%s" % json.dumps(h), 10, "hash 应为 " + h)
+        # 中文 hash 会被浏览器编码成 %XX，比较前先解码，否则永远等不到
+        self.browser.wait_js("decodeURIComponent(location.hash)===%s" % json.dumps(h),
+                             10, "hash 应为 " + h)
         self.browser.wait_js("document.readyState==='complete'", 10)
 
 
