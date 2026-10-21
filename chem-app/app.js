@@ -923,8 +923,11 @@
     var keys = e.match || [e.name];
     return allNews().filter(function (n) {
       return keys.some(function (k) { return n.title.indexOf(k) >= 0; });
-    });
+    }).sort(function (a, b) { return (b.ts || 0) - (a.ts || 0); });
   }
+
+  /* 超过 3 个月的动态灰掉：企业页最怕拿三个月前的旧闻当现状（G12） */
+  function isOld(ts) { return !!ts && (Date.now() / 1000 - ts) > 90 * 86400; }
 
   function viewEnt(key, idx) {
     var c = null, p = null, e = null;
@@ -976,7 +979,9 @@
       dyn.slice(0, 8).forEach(function (n) {
         h += '<a class="row" href="' + esc(n.url) + '" target="_blank" rel="noopener">' +
           '<div class="main"><div class="rt">' + esc(n.title) + '</div>' +
-          '<div class="rm"><span class="tag">' + esc(n.source) + '</span><span>' + esc(dateStr(n.ts)) + '</span></div>' +
+          '<div class="rm"><span class="tag">' + esc(n.source) + '</span>' +
+          '<span' + (isOld(n.ts) ? ' class="old"' : '') + '>' + esc(dateStr(n.ts)) +
+          (isOld(n.ts) ? ' · 3个月前' : '') + '</span></div>' +
           '</div><span class="arrow">›</span></a>';
       });
       h += '</div>';
@@ -1072,10 +1077,21 @@
     h += '<div class="sec-title">头部企业</div><div class="card">';
     (c.leaders || []).forEach(function (l) {
       var hit = findEnt(l.name);
-      var href = hit ? '#/ent/' + hit.key + '/' + hit.idx : 'javascript:void(0)';
-      h += '<a class="row" href="' + href + '"><div class="main"><div class="rt">' + esc(l.name) + '</div>' +
-        '<div class="rm">' + esc(l.note || '') + (hit ? ' · 园区收录' : '') + '</div></div>' +
-        (hit ? '<span class="arrow">›</span>' : '') + '</a>';
+      if (hit) {
+        h += '<a class="row" href="#/ent/' + hit.key + '/' + hit.idx + '">' +
+          '<div class="main"><div class="rt">' + esc(l.name) + '</div>' +
+          '<div class="rm">' + esc(l.note || '') + ' · 园区收录</div></div>' +
+          '<span class="arrow">›</span></a>';
+      } else {
+        /* 省外/国外公司：不做成可点链接（点了没反应更糟），
+           标明不在山东名录里，并给一个「查它有没有山东据点」的入口 */
+        h += '<div class="row"><div class="main">' +
+          '<div class="rt">' + esc(l.name) + '</div>' +
+          '<div class="rm"><span class="leader off">' + (l.note ? esc(l.note) + ' · ' : '') +
+          '不在山东名录<i>省外/国外</i></span>' +
+          '<a class="lk" href="#/parks/' + encodeURIComponent(l.name) + '">查山东据点</a>' +
+          '</div></div></div>';
+      }
     });
     h += '</div>';
 
@@ -1089,7 +1105,13 @@
           '<div class="mn">' + esc(n) + '</div><div class="mp"><b class="' + cc.c + '">' + px(p.price) + '</b>' +
           '<s class="' + cc.c + '">' + cc.t + '</s></div></a>';
       });
-      h += '</div>';
+      h += '<div class="hint" style="padding:2px 12px 10px">这一项是该品类的同品种或成本锚期货，' +
+        '不是这个品种本身的现货成交价。</div></div>';
+    } else {
+      h += '<div class="sec-title">相关行情</div><div class="card"><div class="empty" ' +
+        'style="padding:22px 20px">暂无对应期货品种<br>' +
+        '<span style="font-size:12px">这个品类在国内期货市场没有上市合约，不硬凑一个品种给你</span>' +
+        '</div></div>';
     }
 
     var rel = allNews().filter(function (n) {
@@ -1299,6 +1321,17 @@
   }
 
   /* ------------------------------------------------ 政策 */
+  /* ------------------------------------------------ 政策 */
+  /* 搜政策时的大白话映射：用户说「环保」，文件里写的是「生态环境部」 */
+  var POL_SYN = {
+    "环保": ["环境", "生态", "排污", "污染"],
+    "安全": ["安全生产", "应急", "危化"],
+    "补贴": ["奖补", "补助", "资金", "支持"],
+    "园区": ["化工园区", "扩区", "调区"],
+    "能耗": ["节能", "双碳", "碳", "能效"],
+    "投资": ["项目", "备案", "核准", "审批"]
+  };
+
   function viewPolicies() {
     setHeader("化工政策", {});
     if (!D.policies || !D.policies.items) { app.innerHTML = '<div class="empty">政策数据未加载</div>'; return; }
@@ -1310,31 +1343,66 @@
       UI.level = f || "国家级";
     }
 
-    var h = '<div class="chips">';
-    ["国家级", "山东省"].forEach(function (lv) {
-      var cnt = items.filter(function (p) { return p.level === lv; }).length;
-      h += '<button class="chip' + (UI.level === lv ? " on" : "") + '" data-lv="' + lv + '">' + lv + ' ' + cnt + '</button>';
-    });
-    h += '</div>';
+    var h = '<div class="card" style="padding:0"><div style="padding:9px 12px">' +
+      '<input id="q" placeholder="搜政策：标题 / 机关 / 影响" value="' + esc(UI.q) + '" ' +
+      'style="width:100%;height:36px;border:1px solid var(--line);border-radius:9px;padding:0 12px;font-size:14px;outline:0;background:#fafbfc"></div></div>';
 
-    var list = items.filter(function (p) { return p.level === UI.level; });
+    var q = (UI.q || "").toLowerCase();
+    /* 大白话也得搜得到：文件里写「生态环境部」，人嘴上说的是「环保」 */
+    var WORDS = [[q]];
+    Object.keys(POL_SYN).forEach(function (k) {
+      if (q.indexOf(k) >= 0) WORDS.push(POL_SYN[k]);
+    });
+    var list, head;
+
+    if (q) {
+      /* 搜索跨两级：找政策时不该被「国家级/山东省」挡住 */
+      list = items.filter(function (p) {
+        var hay = [p.title, p.org, p.impact, p.level].join(" ").toLowerCase();
+        return WORDS.some(function (ws) {
+          return ws.some(function (w) { return w && hay.indexOf(w) >= 0; });
+        });
+      });
+      head = '<div class="sec-title">搜索结果 <span class="subtle">· ' + list.length +
+        ' 条（含国家级与山东省）</span></div>';
+    } else {
+      h += '<div class="chips">';
+      ["国家级", "山东省"].forEach(function (lv) {
+        var cnt = items.filter(function (p) { return p.level === lv; }).length;
+        h += '<button class="chip' + (UI.level === lv ? " on" : "") + '" data-lv="' + lv + '">' + lv + ' ' + cnt + '</button>';
+      });
+      h += '</div>';
+      list = items.filter(function (p) { return p.level === UI.level; });
+      head = "";
+    }
+
+    h += head;
     if (!list.length) {
-      h += '<div class="empty">这一级暂无收录<br><span style="font-size:12px">政策源还在补充中</span></div>';
+      h += '<div class="empty">没有匹配的政策<br><span style="font-size:12px">' +
+        (q ? '换个词试试，比如「环保」「园区」「奖补」' : '这一级暂无收录，政策源还在补充中') +
+        '</span></div>';
     } else {
       h += '<div class="card">';
       list.forEach(function (p) {
         var read = has(S.read, "pol:" + (p.id || phash(p)));
         h += '<a class="row" href="#/policy/' + esc(p.id || phash(p)) + '">' +
           '<div class="main"><div class="rt">' + esc(p.title) + '</div>' +
-          '<div class="rm"><span class="tag">' + esc(p.org) + '</span>' +
+          '<div class="rm"><span class="tag">' + esc(p.level) + '</span>' +
+          '<span>' + esc(p.org) + '</span>' +
           '<span>' + esc(dateStr(p.ts)) + '</span>' +
           (read ? '<span class="tag cat">已读</span>' : '') + '</div></div>' +
           '<span class="arrow">›</span></a>';
       });
       h += '</div>';
     }
-    h += '<div class="hint">第一版政策源：山东省工信厅 + 国家发改委。国家级政策源仍在补充。</div>';
+    h += '<div class="hint">第一版政策源：山东省工信厅 + 国家发改委 + 生态环境部。国家级政策源仍在补充。</div>';
     app.innerHTML = h;
+
+    var qi = $("q");
+    if (qi) qi.oninput = function () {
+      UI.q = qi.value; var pos = qi.selectionStart; viewPolicies();
+      var n = $("q"); if (n) { n.focus(); try { n.setSelectionRange(pos, pos); } catch (e) {} }
+    };
     Array.prototype.forEach.call(app.querySelectorAll(".chip"), function (c) {
       c.onclick = function () { UI.level = c.dataset.lv; viewPolicies(); };
     });
@@ -1357,6 +1425,13 @@
       '<div class="kv"><span class="k">发文机关</span><span class="v">' + esc(p.org) + '</span></div>' +
       '<div class="kv"><span class="k">发布日期</span><span class="v">' + esc(dateStr(p.ts) || "—") + '</span></div>' +
       '</div>';
+    if (p.impact) {
+      h += '<div class="sec-title">对撮合的影响</div><div class="card">' +
+        '<div class="field"><div class="fv">' + esc(p.impact) + '</div></div>' +
+        '<div class="hint" style="padding:0">' +
+        (p.impact_src === "rule" ? '按标题关键词自动归类，仅供参考。' : '') +
+        '具体条款以原文为准。</div></div>';
+    }
     h += '<div class="card"><a class="row" href="' + esc(p.url) + '" target="_blank" rel="noopener">' +
       '<div class="main"><div class="rt">查看政策原文</div>' +
       '<div class="rm">跳转到发布机关官网</div></div><span class="arrow">›</span></a></div>';

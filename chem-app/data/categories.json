@@ -1,6 +1,6 @@
 {
  "updated_at_text": "2026-10-21",
- "note": "品类知识为人工整理，品种口径参考资料库《化工品种速查手册》，行业变化快，发现出入请指出，我改。",
+ "note": "品类知识为人工整理，品种口径参考资料库《化工品种速查手册》，行业变化快，发现出入请指出，我改。「相关行情」是该品类的同品种或成本锚期货，不是该品种本身的现货成交价。",
  "groups": [
   {
    "name": "高端新材料",
@@ -374,7 +374,9 @@
      "note": ""
     }
    ],
-   "price_links": []
+   "price_links": [
+    "聚乙烯"
+   ]
   },
   {
    "id": "pvdf",
@@ -827,7 +829,9 @@
      "note": ""
     }
    ],
-   "price_links": []
+   "price_links": [
+    "苯乙烯"
+   ]
   },
   {
    "id": "ps",
@@ -862,7 +866,9 @@
      "note": ""
     }
    ],
-   "price_links": []
+   "price_links": [
+    "苯乙烯"
+   ]
   },
   {
    "id": "eva",
@@ -896,7 +902,9 @@
      "note": ""
     }
    ],
-   "price_links": []
+   "price_links": [
+    "聚乙烯"
+   ]
   },
   {
    "id": "mdi_agg",
@@ -1332,11 +1340,21 @@
    ],
    "leaders": [
     {
-     "name": "各氯碱企业自产自用为主",
-     "note": ""
+     "name": "滨化集团",
+     "note": "滨州 · 氯碱＋环氧丙烷"
+    },
+    {
+     "name": "山东恒通化工",
+     "note": "临沂郯城 · 烧碱＋PVC"
+    },
+    {
+     "name": "潍坊亚星化学",
+     "note": "潍坊 · 氯化聚乙烯 CPE"
     }
    ],
-   "price_links": []
+   "price_links": [
+    "烧碱"
+   ]
   },
   {
    "id": "bromine",
@@ -1472,7 +1490,9 @@
      "note": "临沂"
     }
    ],
-   "price_links": []
+   "price_links": [
+    "尿素"
+   ]
   },
   {
    "id": "glyphosate",
@@ -1600,7 +1620,9 @@
      "note": "威海，工程巨胎强"
     }
    ],
-   "price_links": []
+   "price_links": [
+    "天然橡胶"
+   ]
   },
   {
    "id": "carbonblack",
@@ -1767,7 +1789,9 @@
      "note": "光伏玻璃龙头"
     }
    ],
-   "price_links": []
+   "price_links": [
+    "玻璃"
+   ]
   },
   {
    "id": "dmc_solvent",
@@ -1800,7 +1824,9 @@
      "note": "德州，DMC 副产"
     }
    ],
-   "price_links": []
+   "price_links": [
+    "甲醇"
+   ]
   },
   {
    "id": "needlcoke",
@@ -1935,7 +1961,9 @@
      "note": "淄博，纯苯与芳烃"
     }
    ],
-   "price_links": []
+   "price_links": [
+    "对二甲苯"
+   ]
   },
   {
    "id": "methanol",
@@ -2072,7 +2100,9 @@
      "note": ""
     }
    ],
-   "price_links": []
+   "price_links": [
+    "液化石油气"
+   ]
   },
   {
    "id": "phenol",
@@ -2406,7 +2436,9 @@
      "note": ""
     }
    ],
-   "price_links": []
+   "price_links": [
+    "甲醇"
+   ]
   },
   {
    "id": "tio2",
@@ -2610,5 +2642,5 @@
    "price_links": []
   }
  ],
- "updated_at": 1792566976
+ "updated_at": 1792568307
 }

@@ -52,6 +52,9 @@ class Handler(SimpleHTTPRequestHandler):
     def log_message(self, *a):  # 静音
         pass
 
+    def handle_error(self, *a):  # 浏览器退出时的连接重置不算错误
+        pass
+
 
 def make_handler(root):
     class H(Handler):
@@ -252,6 +255,19 @@ class Browser:
         if r == "MISS":
             raise AssertionError("点击目标不存在: %s[%d]" % (selector, index))
         return r
+
+    def type_into(self, selector, text):
+        """往输入框里打字：改 value + 派发 input 事件，等同于用户真的输入"""
+        expr = ("(function(){var e=document.querySelector(%s);if(!e)return 'MISS';"
+                "e.value=%s;e.dispatchEvent(new Event('input',{bubbles:true}));return 'OK';})()"
+                % (json.dumps(selector), json.dumps(text)))
+        r = self.cdp.eval(expr)
+        if r == "MISS":
+            raise AssertionError("输入框不存在: %s" % selector)
+        return r
+
+    def count(self, selector):
+        return self.cdp.eval("document.querySelectorAll(%s).length" % json.dumps(selector)) or 0
 
     def click_and_wait_hash(self, selector, prefix, index=0, timeout=15):
         self.click(selector, index)

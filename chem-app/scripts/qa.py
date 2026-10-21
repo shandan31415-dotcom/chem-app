@@ -19,9 +19,7 @@ BASE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DATA = os.path.join(BASE, "data")
 
 # 已知问题 -> 对应差距编号。P5 必须清空。
-XFAIL = {
-    "4": "G16 液氯头部企业仅 1 家（不是企业名），P4-5 补足 3 家",
-}
+XFAIL = {}
 
 # 头部企业允许 <3 家的白名单（品类 id -> (下限, 原因)）。必须逐步清空。
 LEADER_WHITELIST = {}

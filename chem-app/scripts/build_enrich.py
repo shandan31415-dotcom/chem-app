@@ -33,6 +33,40 @@ NAME_OVERRIDE = {
     "己内酰胺": "己内酰胺（CPL）",
 }
 
+# ---------------------------------------------------------------------------
+# 品类 → 期货品种（G13：58 个品类原本没有行情入口）
+#
+# 为什么不直接拿 ALIAS 反查产品名：会误配。
+#   ①「煤沥青」（焦化副产品）会被当成沥青期货；
+#   ② PEEK 里的 "PE"、PPS 里的 "PS" 会被当成聚乙烯 / 聚苯乙烯。
+# 所以这里按品类显式声明，只认两种关系：同品种，或该品类的成本锚 / 最接近的上市品种。
+# 声明后仍要做两道校验：品种必须在 prices.json 里真实存在；同一品类不重复。
+CAT_PRICE_LINKS = {
+    # 同品种
+    "px": ["对二甲苯"],
+    "cl2": ["烧碱"],              # 液氯与烧碱强制联产，氯碱利润要一起看
+    "abs": ["苯乙烯"],            # 苯乙烯是 ABS 的成本锚
+    "ps": ["苯乙烯"],
+    "compoundfert": ["尿素"],      # 复合肥成本锚＝尿素/磷铵/钾肥，尿素有期货
+    "tire": ["天然橡胶"],          # 轮胎成本锚
+    "solar": ["玻璃"],            # 光伏玻璃跟着浮法玻璃走
+    "propylene": ["液化石油气"],     # 山东大量 PDH，丙烷是丙烯的成本锚
+    "organosilicon": ["甲醇"],      # 有机硅单体耗甲醇
+    "dmc_solvent": ["甲醇"],       # 碳酸二甲酯酯交换法耗甲醇
+    "polyolefin": ["聚乙烯", "聚丙烯"],
+    "eva": ["聚乙烯"],            # EVA 与 LLDPE 共享乙烯资源，价差常被跟踪
+    "poe": ["聚乙烯"],
+}
+
+# 头部企业人工校正：品种速查手册里这一栏写的是说明而不是企业名
+LEADER_FIX = {
+    "cl2": [
+        {"name": "滨化集团", "note": "滨州 · 氯碱＋环氧丙烷"},
+        {"name": "山东恒通化工", "note": "临沂郯城 · 烧碱＋PVC"},
+        {"name": "潍坊亚星化学", "note": "潍坊 · 氯化聚乙烯 CPE"},
+    ],
+}
+
 
 def build_parks():
     path = os.path.join(DATA, "parks.json")
@@ -161,6 +195,29 @@ def build_cats():
         if not it.get("price_links") and cid in PRICE_MAP:
             it["price_links"] = [PRICE_MAP[cid]]
 
+    # C2. 按品类声明补充/合并行情链接（G13），带两道校验
+    prices = json.load(open(os.path.join(DATA, "prices.json"), encoding="utf-8"))
+    known = {p["name"] for g in prices["groups"] for p in g["items"]}
+    added_links = 0
+    for cid, names in CAT_PRICE_LINKS.items():
+        it = items.get(cid)
+        if not it:
+            continue
+        cur = list(it.get("price_links") or [])
+        for n in names:
+            if n not in known:
+                raise SystemExit("CAT_PRICE_LINKS：%s 指向的品种 %s 不在行情里" % (cid, n))
+            if n in cur:
+                continue
+            cur.append(n)
+            added_links += 1
+        it["price_links"] = cur
+
+    # C3. 头部企业校正（G16）
+    for cid, ls in LEADER_FIX.items():
+        if cid in items:
+            items[cid]["leaders"] = ls
+
     # D. 分组（丢掉不存在的 id）
     groups = []
     used = set()
@@ -182,9 +239,12 @@ def build_cats():
     d["updated_at"] = int(time.time())
     d["updated_at_text"] = "2026-10-21"
     d["note"] = ("品类知识为人工整理，品种口径参考资料库《化工品种速查手册》，"
-                 "行业变化快，发现出入请指出，我改。")
+                 "行业变化快，发现出入请指出，我改。"
+                 "「相关行情」是该品类的同品种或成本锚期货，不是该品种本身的现货成交价。")
     json.dump(d, open(path, "w", encoding="utf-8"), ensure_ascii=False, indent=1)
-    print("categories.json ->  分组 %d / 品类 %d（新增 %d）" % (len(groups), len(flat), added))
+    linked = sum(1 for it in flat if it.get("price_links"))
+    print("categories.json ->  分组 %d / 品类 %d（新增 %d，行情入口 %d，本次新增链接 %d）"
+          % (len(groups), len(flat), added, linked, added_links))
 
 
 if __name__ == "__main__":
