@@ -240,3 +240,10 @@ nav{position:fixed;left:0;right:0;bottom:0;z-index:50;display:flex;
 .netbar{font-size:11.5px;line-height:1.5;color:#ffd8a8;background:rgba(255,255,255,.09);
   border-radius:7px;padding:5px 9px;margin-top:6px;border-left:2px solid #f0a53a}
 .netbar[hidden]{display:none}
+
+/* ---------- 首页：今日内容的补充行 ---------- */
+.jx{font-size:11.5px;color:#6b7280;margin-top:5px;line-height:1.5;
+  background:#f7f8fa;border-radius:6px;padding:5px 8px}
+.mnews{display:block;font-style:normal;font-size:11px;color:#9aa1ab;margin-top:3px;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:170px}
+.mnews.none{color:#c2c7cf}

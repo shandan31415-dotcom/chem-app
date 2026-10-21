@@ -22,7 +22,7 @@
 
   /* ------------------------------------------------ 本地存储 */
   var KEY = "chemapp.v1";
-  var S = { fav: [], read: [], learned: [], lastOpen: 0 };
+  var S = { fav: [], read: [], learned: [], lastOpen: 0, seen: {} };
   function storeLoad() {
     try { var s = JSON.parse(localStorage.getItem(KEY) || "null"); if (s) S = Object.assign(S, s); } catch (e) {}
     S.lastOpen = Date.now();
@@ -210,27 +210,128 @@
     netUI();
   }
 
-  /* ------------------------------------------------ 首页 */
+  /* ------------------------------------------------ 首页（今日课表）
+     首页不生产内容，只按 PRD 3.3 的优先级从各库里挑，且每张卡片都能点进真详情。 */
+
+  /* 企业全量索引：园区内企业 + 市级重点企业 */
+  function allEnts() {
+    var out = [];
+    cityList().forEach(function (c) {
+      (c.parks || []).forEach(function (p) {
+        (p.enterprises || []).forEach(function (e, i) {
+          out.push({ e: e, key: p.id, idx: i, city: c, park: p });
+        });
+      });
+      (c.enterprises || []).forEach(function (e, i) {
+        out.push({ e: e, key: "c" + c.code, idx: i, city: c, park: null });
+      });
+    });
+    return out;
+  }
+
+  /* 按标题反查企业：取命中最长的那个（避免「海化」抢走「山东海化集团」的新闻） */
+  function entByTitle(t) {
+    var hit = null, best = 2;
+    allEnts().forEach(function (x) {
+      var n = x.e.name;
+      if (n.length >= 3 && t.indexOf(n) >= 0 && n.length > best) { hit = x; best = n.length; }
+    });
+    return hit;
+  }
+
+  function parkByTitle(t) {
+    var hit = null, best = 3;
+    allParks().forEach(function (p) {
+      var n = p.name;
+      if (n && n.length >= 4 && t.indexOf(n) >= 0 && n.length > best) { hit = p; best = n.length; }
+    });
+    return hit;
+  }
+
+  /* ① 今日一品：未学过且有当天新闻 → 未学过 → 已学过里最久没看的 */
   function pickTodayCat() {
     if (!D.cats) return null;
     var all = D.cats.items;
-    var unlearned = all.filter(function (c) { return !has(S.learned, c.id); });
-    // 按顺序推进：永远给「第一个还没学的」，学完了再回过头循环
-    if (unlearned.length) return unlearned[0];
-    var day = Math.floor(Date.now() / 86400000);
-    return all[day % all.length];
+    var today = allNews();
+    var un = all.filter(function (c) { return !has(S.learned, c.id); });
+    var hot = un.filter(function (c) {
+      return today.some(function (n) { return (n.cats || []).indexOf(c.name) >= 0; });
+    });
+    if (hot.length) return hot[0];
+    if (un.length) return un[0];
+    return all.slice().sort(function (a, b) {
+      return (S.seen[a.id] || 0) - (S.seen[b.id] || 0);
+    })[0];
+  }
+
+  /* ② 今日一策：近 7 天内，有明确产业影响的优先于程序性通知 */
+  var POL_IMPACT_KW = ["产能", "环保", "安全", "关税", "准入", "补贴", "淘汰", "限制",
+                       "禁止", "园区", "危化", "许可", "标准", "奖补", "投资", "名录"];
+  function pickPolicy() {
+    var items = (D.policies && D.policies.items) || [];
+    if (!items.length) return null;
+    var now = Date.now() / 1000;
+    var recent = items.filter(function (p) { return p.ts && now - p.ts <= 7 * 86400; });
+    var pool = recent.length ? recent : items;
+    var scored = pool.map(function (p) {
+      var n = 0;
+      POL_IMPACT_KW.forEach(function (k) { if (p.title.indexOf(k) >= 0) n++; });
+      return { p: p, w: n, ts: p.ts || 0 };
+    });
+    scored.sort(function (a, b) { return (b.w - a.w) || (b.ts - a.ts); });
+    return scored[0].p;
+  }
+
+  /* ③ 今日一动：近 7 天，动作强度高的优先，且必须能反查企业或园区 */
+  var ACT_STRONG = ["投产", "开工", "试产", "开车", "点火", "建成", "奠基", "签约",
+                    "扩产", "扩建", "环评", "并购", "收购", "中标", "获批"];
+  var ACT_WEAK = ["获奖", "荣获", "参会", "论坛", "会议", "调研", "座谈", "颁发",
+                  "上榜", "入选", "揭牌"];
+  function pickMove() {
+    var now = Date.now() / 1000;
+    var list = allNews().filter(function (n) { return n.ts && now - n.ts <= 7 * 86400; });
+    if (!list.length) list = allNews();
+    var scored = list.map(function (n) {
+      var s = 0;
+      ACT_STRONG.forEach(function (k) { if (n.title.indexOf(k) >= 0) s += 3; });
+      ACT_WEAK.forEach(function (k) { if (n.title.indexOf(k) >= 0) s += 1; });
+      var ent = entByTitle(n.title);
+      var park = ent ? null : parkByTitle(n.title);
+      return { n: n, s: s, ent: ent, park: park };
+    });
+    // 优先取「能落到企业/园区」的，其次动作强度，其次离山东更近，最后按时间
+    var LOC = { "山东": 2, "全国": 1, "全球": 0 };
+    scored.sort(function (a, b) {
+      var ra = (a.ent ? 2 : (a.park ? 1 : 0)), rb = (b.ent ? 2 : (b.park ? 1 : 0));
+      return (rb - ra) || (b.s - a.s) ||
+        ((LOC[b.n.block] || 0) - (LOC[a.n.block] || 0)) ||
+        ((b.n.ts || 0) - (a.n.ts || 0));
+    });
+    return scored[0] || null;
+  }
+
+  /* ④ 价格异动：涨跌幅绝对值前 3，同品种不重复 */
+  function pickMovers() {
+    var ps = allPrices().filter(function (p) {
+      return typeof p.chg === "number" && !isNaN(p.chg);
+    });
+    ps.sort(function (a, b) { return Math.abs(b.chg) - Math.abs(a.chg); });
+    var out = [], seen = {};
+    ps.forEach(function (p) {
+      if (out.length >= 3 || seen[p.name]) return;
+      seen[p.name] = 1;
+      out.push(p);
+    });
+    return out;
   }
 
   function viewHome() {
     setHeader("高端化工", {});
     var cat = pickTodayCat();
-    var news = allNews();
-    var ps = allPrices();
-
-    var pol = (D.policies && D.policies.items || []).slice().sort(function (a, b) { return (b.ts || 0) - (a.ts || 0); })[0];
-    var mv = news.filter(function (n) { return n.cats && n.cats.length; })[0] || news[0];
-    var movers = ps.filter(function (p) { return p.chg !== null && p.chg !== undefined; })
-      .sort(function (a, b) { return Math.abs(b.chg) - Math.abs(a.chg); }).slice(0, 3);
+    var pol = pickPolicy();
+    var mv = pickMove();
+    var movers = pickMovers();
+    var used = {};   // 首页去重：同一件事只出现一次
 
     var h = "";
     if (cat) {
@@ -242,19 +343,42 @@
     }
 
     if (pol) {
+      var pid = pol.id || phash(pol);
+      used[pol.title] = 1;
       h += '<div class="card"><div class="card-hd">今日一策</div>' +
-        '<a class="jrow" href="#/policy/' + esc(pol.id || phash(pol)) + '" style="display:flex">' +
+        '<a class="jrow" href="#/policy/' + esc(pid) + '" style="display:flex">' +
         '<span class="jtag pol">' + esc(pol.level || "政策") + '</span>' +
         '<div class="jmain"><div class="jt">' + esc(pol.title) + '</div>' +
-        '<div class="jm">' + esc(pol.org || "") + ' · ' + esc(dateStr(pol.ts)) + '</div></div></a></div>';
+        '<div class="jm">' + esc(pol.org || "") + ' · ' + esc(dateStr(pol.ts)) + '</div>' +
+        (pol.impact ? '<div class="jx">' + esc(pol.impact) + '</div>' : '') +
+        '</div></a></div>';
     }
 
     if (mv) {
-      h += '<div class="card"><div class="card-hd">今日一动 <span class="n">' + esc(mv.source || "") + '</span></div>' +
-        '<a class="jrow" href="' + esc(mv.url) + '" target="_blank" rel="noopener" style="display:flex">' +
-        '<span class="jtag ent">动向</span>' +
-        '<div class="jmain"><div class="jt">' + esc(mv.title) + '</div>' +
-        '<div class="jm">' + esc(mv.block) + ' · ' + esc(dayKey(mv.ts)) + '</div></div></a></div>';
+      var n = mv.n;
+      used[n.title] = 1;
+      var href, tag, meta;
+      if (mv.ent) {
+        href = "#/ent/" + mv.ent.key + "/" + mv.ent.idx;
+        tag = "企业动向";
+        meta = mv.ent.city.name + ' · ' + (mv.ent.park ? mv.ent.park.name : "市级重点企业") +
+          ' · ' + dayKey(n.ts);
+      } else if (mv.park) {
+        href = "#/park/" + mv.park.id;
+        tag = "园区动向";
+        meta = mv.park.city + ' · ' + mv.park.name + ' · ' + dayKey(n.ts);
+      } else {
+        href = n.url || "#";
+        tag = "行业动向";
+        meta = esc(n.source || "") + ' · ' + dayKey(n.ts) + ' · 未匹配到收录企业';
+      }
+      var ext = /^#\//.test(href) ? "" : ' target="_blank" rel="noopener"';
+      h += '<div class="card"><div class="card-hd">今日一动 <span class="n">' +
+        esc(n.source || "") + '</span></div>' +
+        '<a class="jrow" href="' + esc(href) + '"' + ext + ' style="display:flex">' +
+        '<span class="jtag ent">' + tag + '</span>' +
+        '<div class="jmain"><div class="jt">' + esc(n.title) + '</div>' +
+        '<div class="jm">' + meta + '</div></div></a></div>';
     }
 
     if (movers.length) {
@@ -262,23 +386,43 @@
       movers.forEach(function (p) {
         var c = pct(p.chg);
         h += '<a class="mover" href="#/price/' + encodeURIComponent(p.name) + '">' +
-          '<div class="mn">' + esc(p.name) + '<i>' + esc(p.code) + '</i></div>' +
+          '<div class="mn">' + esc(p.name) + '<i>' + esc(p.code) + '</i>' +
+          moverNewsLine(p, used) + '</div>' +
           '<div class="mp"><b class="' + c.c + '">' + px(p.price) + '</b>' +
           '<s class="' + c.c + '">' + c.t + '</s></div></a>';
       });
       h += '</div>';
     }
 
-    var total = D.cats ? D.cats.items.length : 12;
+    var total = D.cats ? D.cats.items.length : 0;
     var lr = S.learned.length;
+    var polTotal = (D.policies && D.policies.items || []).length;
+    var polRead = S.read.filter(function (k) { return String(k).indexOf("pol:") === 0; }).length;
     h += '<div class="card"><div class="card-hd">学习进度</div><div class="prog">' +
       '<div class="lbl"><span>已学品类</span><span>' + lr + ' / ' + total + '</span></div>' +
-      '<div class="bar"><i style="width:' + Math.round(lr / total * 100) + '%"></i></div>' +
-      '<div class="lbl"><span>已读政策</span><span>' + S.read.length + ' 条</span></div>' +
-      '<div class="bar"><i style="width:' + Math.min(100, S.read.length * 10) + '%"></i></div>' +
+      '<div class="bar"><i style="width:' + (total ? Math.round(lr / total * 100) : 0) + '%"></i></div>' +
+      '<div class="lbl"><span>已读政策</span><span>' + polRead + ' / ' + polTotal + ' 条</span></div>' +
+      '<div class="bar"><i style="width:' + (polTotal ? Math.round(polRead / polTotal * 100) : 0) + '%"></i></div>' +
       '</div></div>';
 
     app.innerHTML = h;
+  }
+
+  /* 价格异动下面那行「和这有关的新闻」；已被今日一动用掉的新闻不再重复 */
+  function moverNewsLine(p, used) {
+    var ns = p.news || [];
+    for (var i = 0; i < ns.length; i++) {
+      if (!used[ns[i].title]) {
+        used[ns[i].title] = 1;
+        return '<em class="mnews">' + esc(cut(ns[i].title, 24)) + '</em>';
+      }
+    }
+    return '<em class="mnews none">暂无相关报道</em>';
+  }
+
+  function cut(s, n) {
+    s = String(s || "");
+    return s.length > n ? s.slice(0, n) + "…" : s;
   }
   function phash(p) { return "p" + (p.ts || 0) + p.title.length; }
 
@@ -845,6 +989,8 @@
     var c = catById(id);
     if (!c) { app.innerHTML = '<div class="empty">未找到品类</div>'; return; }
     if (!has(S.learned, c.id)) { S.learned.push(c.id); storeSave(); }
+    S.seen[c.id] = Date.now();   // 记录「最久没看」，供首页今日一品挑选用
+    storeSave();
     setHeader(c.name, { back: true, favKey: "cat:" + c.id });
 
     var fields = [

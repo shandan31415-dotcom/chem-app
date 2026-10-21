@@ -707,6 +707,31 @@ def date_from_page(url):
     return None
 
 
+# 政策影响：按标题关键词归纳「这条大概影响什么」，不做结论性判断，也不编数字。
+# impact_src 标 rule，前端标「规则归纳」，与 AI 推断同等对待，不冒充官方解读。
+POLICY_IMPACT = [
+    (["化学物质", "名录", "登记"], "涉及化学物质名录与环境管理登记，影响新产品上市与进口合规"),
+    (["奖补", "补贴", "数智化", "改造"], "涉及财政奖补与改造支持，符合条件的企业可申报"),
+    (["投资", "项目管理", "审批"], "涉及化工项目投资管理与审批口径，影响新项目能不能落地"),
+    (["稳增长", "行动方案", "发展规划", "实施方案"], "属于行业发展部署，方向性信号，具体支持看配套细则"),
+    (["危险化学品", "危化"], "涉及危化品生产储存的合规要求，园区内相关企业要对照自查"),
+    (["化工园区", "园区"], "涉及化工园区认定与管理口径，影响园内企业的准入与配套"),
+    (["环保", "生态环境", "排放", "污染", "治理"], "涉及环保排放与治理要求，可能抬高技改与运行成本"),
+    (["安全生产", "安全"], "涉及安全生产要求，影响装置运行、检修与验收安排"),
+    (["产能", "置换", "新增"], "涉及产能置换与项目审批，影响在建与拟建装置的节奏"),
+    (["淘汰", "限制", "禁止", "退出"], "涉及落后产能退出与限制类目录，影响存量装置能不能继续干"),
+    (["标准", "规范", "指南", "导则"], "涉及标准与规范口径，可能改变下游采购与验收依据"),
+    (["新材料", "高端", "精细化工"], "涉及高端新材料方向的支持口径，与品类升级相关"),
+]
+
+
+def policy_impact(title):
+    for kws, txt in POLICY_IMPACT:
+        if any(k in title for k in kws):
+            return txt
+    return ""
+
+
 def resolve_policy_url(h, src):
     if h.startswith("http"):
         return h
@@ -736,7 +761,8 @@ def fetch_policies():
             url = resolve_policy_url(h, src)
             ts = date_from_url(url)
             out.append({"id": "pol%d" % (len(out) + 1), "title": title, "url": url,
-                        "level": src["level"], "org": src["org"], "ts": ts})
+                        "level": src["level"], "org": src["org"], "ts": ts,
+                        "impact": policy_impact(title), "impact_src": "rule"})
             got += 1
         print("     %s %s: %d 条" % (src["level"], src["org"], got))
 
