@@ -47,16 +47,25 @@ def free_port():
 
 class Handler(SimpleHTTPRequestHandler):
     def __init__(self, *a, **kw):
-        super().__init__(*a, directory=ROOT, **kw)
+        super().__init__(*a, directory=kw.pop("_root", ROOT), **kw)
 
     def log_message(self, *a):  # 静音
         pass
 
 
+def make_handler(root):
+    class H(Handler):
+        def __init__(self, *a, **kw):
+            kw["_root"] = root
+            super().__init__(*a, **kw)
+    return H
+
+
 class Server:
-    def __init__(self):
+    def __init__(self, root=None):
+        self.root = root or ROOT
         self.port = free_port()
-        self.httpd = ThreadingHTTPServer(("127.0.0.1", self.port), Handler)
+        self.httpd = ThreadingHTTPServer(("127.0.0.1", self.port), make_handler(self.root))
         self.thread = threading.Thread(target=self.httpd.serve_forever, daemon=True)
 
     def __enter__(self):
@@ -260,14 +269,15 @@ class Browser:
 
 
 class App:
-    """Server + Browser 的组合上下文"""
+    """Server + Browser 的组合上下文。root 可指向一个「数据被改坏」的副本，用于隔离性测试。"""
 
-    def __init__(self):
+    def __init__(self, root=None):
+        self.root = root or ROOT
         self.server = None
         self.browser = None
 
     def __enter__(self):
-        self.server = Server().__enter__()
+        self.server = Server(self.root).__enter__()
         self.browser = Browser()
         return self
 
@@ -297,3 +307,22 @@ class App:
         self.browser.cdp.eval("location.hash=%s" % json.dumps(h))
         self.browser.wait_js("location.hash===%s" % json.dumps(h), 10, "hash 应为 " + h)
         self.browser.wait_js("document.readyState==='complete'", 10)
+
+
+def copy_app():
+    """把 App 拷到临时目录（不含测试与备份），用于「改坏数据文件」这类破坏性测试"""
+    d = tempfile.mkdtemp(prefix="chemax-")
+    dst = os.path.join(d, "app")
+    shutil.copytree(ROOT, dst, ignore=shutil.ignore_patterns(
+        "tests", "backups", "node_modules", "__pycache__", "*.pyc"))
+    return dst
+
+
+def patch_json(root, name, fn):
+    """读改写 data/<name>.json；fn(dict)->dict"""
+    p = os.path.join(root, "data", name)
+    with open(p, encoding="utf-8") as f:
+        d = json.load(f)
+    d = fn(d)
+    with open(p, "w", encoding="utf-8") as f:
+        json.dump(d, f, ensure_ascii=False)

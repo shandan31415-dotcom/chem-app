@@ -7,8 +7,18 @@
   var backBtn = $("back"), favBtn = $("favBtn"), refreshBtn = $("refreshBtn");
 
   var D = { news: null, prices: null, hist: null, cats: null, parks: null, policies: null, meta: null, map: null };
-  var UI = { block: null, city: "", level: null, q: "", mq: "", cq: "" };
+  var DERR = {};   // 各数据文件本次更新失败原因（后端 save_or_keep 写入的 error）
+  var DUPD = {};   // 各数据文件自己的更新时间
+  var UI = { block: null, city: "", level: null, q: "", mq: "", cq: "", pq: "" };
   var CUR = { key: null, type: null };
+
+  var FILE_LABEL = { news: "资讯", prices: "行情", prices_history: "K线",
+                     categories: "品类", parks: "地图", policies: "政策" };
+  // 每个模块依赖哪些数据文件（决定在哪个页面提示「本次更新失败」）
+  var MOD_FILES = {
+    news: ["news"], prices: ["prices", "prices_history"], cats: ["categories"],
+    parks: ["parks"], policies: ["policies"]
+  };
 
   /* ------------------------------------------------ 本地存储 */
   var KEY = "chemapp.v1";
@@ -58,9 +68,9 @@
   }
 
   /* ------------------------------------------------ 数据装载 */
+  var FILES = ["news", "prices", "prices_history", "categories", "parks", "policies", "meta", "sdmap"];
   function loadAll() {
-    var files = ["news", "prices", "prices_history", "categories", "parks", "policies", "meta", "sdmap"];
-    return Promise.all(files.map(function (f) {
+    return Promise.all(FILES.map(function (f) {
       return fetch("data/" + f + ".json?_=" + Date.now())
         .then(function (r) { return r.ok ? r.json() : null; })
         .catch(function () { return null; });
@@ -69,9 +79,41 @@
       D.cats = arr[3]; D.parks = arr[4]; D.policies = arr[5]; D.meta = arr[6];
       D.map = arr[7];
       IDX = null;
+      DERR = {}; DUPD = {};
+      FILES.forEach(function (f, i) {
+        var v = arr[i];
+        if (!v || typeof v !== "object") return;
+        if (v.updated_at_text) DUPD[f] = v.updated_at_text;
+        if (v.error) DERR[f] = v.error;
+      });
       if (D.meta && D.meta.updated_at_text) localStorage.setItem("chemapp.updated", D.meta.updated_at_text);
+      netUI();
     });
   }
+
+  /* ------------------------------------------------ 顶栏提示（更新失败 / 离线） */
+  function curSeg() { return (location.hash.replace(/^#\/?/, "").split("/")[0]) || "home"; }
+
+  function netUI() {
+    var el = $("netbar");
+    if (!el) return;
+    var seg = curSeg();
+    var files = MOD_FILES[seg] || FILES;
+    var msgs = [];
+    if (navigator.onLine === false) {
+      msgs.push("离线 · 显示 " + (localStorage.getItem("chemapp.updated") || "上次") + " 的数据");
+    }
+    files.forEach(function (f) {
+      var e = DERR[f];
+      if (!e) return;
+      var t = DUPD[f] || localStorage.getItem("chemapp.updated") || "上次";
+      msgs.push(FILE_LABEL[f] + "本次更新失败（" + (e.msg || "原因未知") + "），显示 " + t + " 的内容");
+    });
+    el.hidden = !msgs.length;
+    el.textContent = msgs.join("；");
+  }
+  window.addEventListener("online", netUI);
+  window.addEventListener("offline", netUI);
 
   /* ------------------------------------------------ 数据索引 */
   function allNews() {
@@ -165,6 +207,7 @@
     Array.prototype.forEach.call(nav.children, function (b) {
       b.className = "tab" + (b.dataset.r === seg ? " on" : "");
     });
+    netUI();
   }
 
   /* ------------------------------------------------ 首页 */
