@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>高端化工 · 行业认知</title>
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,maximum-scale=1,user-scalable=no">
+<meta name="theme-color" content="#111827">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="高端化工">
+<meta name="format-detection" content="telephone=no">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<header>
+  <div class="hrow">
+    <button class="hback" id="back" style="display:none">‹</button>
+    <div class="htitle" id="ttl">高端化工</div>
+    <button class="hbtn" id="favBtn" style="display:none">☆</button>
+    <button class="hbtn" id="refreshBtn">⟳</button>
+  </div>
+  <div class="hmeta" id="meta">正在加载…</div>
+</header>
+
+<main id="app">
+  <div class="card"><div class="skel"><i></i><i style="width:72%"></i><i></i><i style="width:86%"></i></div></div>
+</main>
+
+<nav id="nav">
+  <button class="tab" data-r="home"><span class="ic">◉</span>总览</button>
+  <button class="tab" data-r="news"><span class="ic">◈</span>资讯</button>
+  <button class="tab" data-r="parks"><span class="ic">▦</span>地图</button>
+  <button class="tab" data-r="cats"><span class="ic">◫</span>品类</button>
+  <button class="tab" data-r="prices"><span class="ic">◪</span>行情</button>
+  <button class="tab" data-r="policies"><span class="ic">▤</span>政策</button>
+</nav>
+
+<script src="app.js"></script>
+</body>
+</html>

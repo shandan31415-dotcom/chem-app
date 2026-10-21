@@ -1,0 +1,397 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>化工每日资讯</title>
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,maximum-scale=1,user-scalable=no">
+<meta name="theme-color" content="#111827">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="化工资讯">
+<meta name="format-detection" content="telephone=no">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
+<style>
+:root{
+  --bg:#f4f5f7; --card:#ffffff; --line:#e9ebef;
+  --text:#141821; --sub:#8a919c; --muted:#b3b9c2;
+  --accent:#0b6b5e; --accent-soft:#e6f4f1;
+  --up:#e03131; --down:#0ca678;
+  --hdr:#111827;
+  --safe-b:env(safe-area-inset-bottom,0px);
+  --safe-t:env(safe-area-inset-top,0px);
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;padding:0}
+body{
+  font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
+  background:var(--bg); color:var(--text);
+  font-size:15px; line-height:1.45;
+  padding-bottom:calc(58px + var(--safe-b));
+  overscroll-behavior-y:contain;
+  -webkit-font-smoothing:antialiased;
+}
+a{color:inherit;text-decoration:none}
+
+/* ---------------- 顶部 ---------------- */
+header{
+  position:sticky; top:0; z-index:30;
+  background:var(--hdr); color:#fff;
+  padding:calc(10px + var(--safe-t)) 16px 10px;
+  box-shadow:0 1px 0 rgba(255,255,255,.06);
+}
+.hrow{display:flex;align-items:center;gap:10px}
+.htitle{font-size:17px;font-weight:600;letter-spacing:.3px;flex:1}
+.hbtn{
+  width:34px;height:34px;border-radius:50%;border:0;flex:0 0 auto;
+  background:rgba(255,255,255,.12);color:#fff;
+  display:flex;align-items:center;justify-content:center;
+  font-size:16px;cursor:pointer;transition:background .15s;
+}
+.hbtn:active{background:rgba(255,255,255,.26)}
+.hmeta{font-size:11.5px;color:rgba(255,255,255,.55);margin-top:3px;display:flex;gap:8px;align-items:center}
+.dot{width:5px;height:5px;border-radius:50%;background:#34d399;display:inline-block}
+.dot.off{background:#f87171}
+
+/* 搜索 */
+.searchwrap{display:none;padding:8px 16px 10px}
+.searchwrap.on{display:block}
+.searchwrap input{
+  width:100%;height:38px;border-radius:19px;border:0;outline:0;
+  padding:0 16px;font-size:14px;background:rgba(255,255,255,.14);color:#fff;
+}
+.searchwrap input::placeholder{color:rgba(255,255,255,.45)}
+
+/* ---------------- 内容 ---------------- */
+main{padding:10px 12px 20px}
+.card{
+  background:var(--card);border-radius:14px;overflow:hidden;
+  margin-bottom:12px;box-shadow:0 1px 2px rgba(16,24,40,.04);
+}
+.card-hd{
+  padding:11px 14px 9px;font-size:12px;font-weight:600;
+  color:var(--accent);letter-spacing:.5px;
+  border-bottom:1px solid var(--line);
+  display:flex;justify-content:space-between;align-items:center;
+}
+.card-hd .n{color:var(--muted);font-weight:400;letter-spacing:0}
+
+/* 价格行 */
+.prow{
+  display:flex;align-items:center;padding:11px 14px;
+  border-bottom:1px solid var(--line);
+}
+.prow:last-child{border-bottom:0}
+.pname{flex:1;min-width:0}
+.pname b{font-weight:500;font-size:14.5px}
+.pname i{font-style:normal;font-size:11px;color:var(--muted);margin-left:6px}
+.pval{text-align:right;min-width:96px}
+.pval .p{font-size:15px;font-weight:600;font-variant-numeric:tabular-nums;letter-spacing:.2px}
+.pval .c{font-size:11.5px;font-variant-numeric:tabular-nums;margin-top:1px}
+.up{color:var(--up)} .down{color:var(--down)} .flat{color:var(--sub)}
+
+/* 资讯行 */
+.nrow{
+  display:block;padding:12px 14px;border-bottom:1px solid var(--line);
+  transition:background .12s;
+}
+.nrow:last-child{border-bottom:0}
+.nrow:active{background:#f7f8fa}
+.ntitle{font-size:15px;line-height:1.42;font-weight:450;
+  display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.nsum{font-size:12.5px;color:var(--sub);margin-top:5px;line-height:1.45;
+  display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.nmeta{font-size:11.5px;color:var(--muted);margin-top:6px;display:flex;gap:8px;align-items:center}
+.tag{background:#f2f4f6;color:#7c848f;padding:1px 6px;border-radius:4px;font-size:10.5px}
+
+/* 空 / 错误 */
+.empty{padding:60px 24px;text-align:center;color:var(--muted);font-size:13.5px;line-height:1.8}
+.warn{
+  background:#fff7e6;color:#96660a;border:1px solid #ffe1a8;
+  border-radius:12px;padding:10px 13px;font-size:12.5px;margin-bottom:12px;
+}
+
+/* 安装提示 */
+.install{
+  background:var(--accent-soft);border-radius:12px;padding:11px 13px;
+  font-size:12.5px;color:#0a5c50;margin-bottom:12px;
+  display:flex;gap:10px;align-items:flex-start;line-height:1.5;
+}
+.install b{font-weight:600}
+.install .x{margin-left:auto;color:#7aa8a0;font-size:16px;padding:0 2px;cursor:pointer;flex:0 0 auto}
+
+/* ---------------- 底部导航 ---------------- */
+nav{
+  position:fixed;left:0;right:0;bottom:0;z-index:40;
+  background:rgba(255,255,255,.97);
+  backdrop-filter:saturate(180%) blur(14px);
+  -webkit-backdrop-filter:saturate(180%) blur(14px);
+  border-top:1px solid var(--line);
+  padding-bottom:var(--safe-b);
+  display:flex;
+  overflow-x:auto;overflow-y:hidden;
+  scrollbar-width:none;
+}
+nav::-webkit-scrollbar{display:none}
+.tab{
+  flex:1 0 auto;min-width:58px;
+  padding:9px 6px 8px;text-align:center;border:0;background:0;
+  font-family:inherit;font-size:11.5px;color:var(--sub);
+  cursor:pointer;position:relative;transition:color .12s;
+}
+.tab .ic{display:block;font-size:17px;line-height:1.15;margin-bottom:2px;opacity:.55}
+.tab.on{color:var(--accent);font-weight:600}
+.tab.on .ic{opacity:1}
+.tab.on::after{
+  content:"";position:absolute;top:2px;left:50%;transform:translateX(-50%);
+  width:18px;height:2.5px;border-radius:2px;background:var(--accent);
+}
+
+.skel{padding:16px}
+.skel i{display:block;height:12px;border-radius:6px;background:linear-gradient(90deg,#eef0f3 25%,#f6f7f9 37%,#eef0f3 63%);background-size:400% 100%;animation:sh 1.3s infinite;margin-bottom:11px}
+@keyframes sh{0%{background-position:100% 50%}100%{background-position:0 50%}}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="hrow">
+    <div class="htitle" id="ttl">化工每日资讯</div>
+    <button class="hbtn" id="btnSearch" aria-label="搜索">⌕</button>
+    <button class="hbtn" id="btnRefresh" aria-label="刷新">⟳</button>
+  </div>
+  <div class="hmeta"><span class="dot" id="liveDot"></span><span id="updated">正在加载…</span></div>
+  <div class="searchwrap" id="searchwrap">
+    <input id="q" type="search" placeholder="搜索标题关键词…" autocomplete="off">
+  </div>
+</header>
+
+<main id="app">
+  <div class="card"><div class="skel"><i></i><i style="width:70%"></i><i></i><i style="width:85%"></i><i style="width:60%"></i></div></div>
+</main>
+
+<nav id="nav"></nav>
+
+<script>
+(function(){
+  "use strict";
+  var DATA_URL = "./data.json";
+  var API_URL  = "./api/data";
+  var app = document.getElementById("app");
+  var nav = document.getElementById("nav");
+  var ttl = document.getElementById("ttl");
+  var upd = document.getElementById("updated");
+  var dot = document.getElementById("liveDot");
+  var ICONS = {prices:"▤", macro:"◈", china:"◉", world:"◎", finance:"◐", society:"◍"};
+
+  var DATA = null, CUR = null, Q = "";
+
+  function esc(s){
+    return String(s==null?"":s).replace(/[&<>"']/g, function(c){
+      return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c];
+    });
+  }
+  function num(v, d){
+    if(v===null||v===undefined||isNaN(v)) return "—";
+    return Number(v).toFixed(d===undefined?0:d);
+  }
+  function pct(v){
+    if(v===null||v===undefined||isNaN(v)) return {t:"—", c:"flat"};
+    var s = (v>0?"+":"") + Number(v).toFixed(2) + "%";
+    return {t:s, c: v>0?"up" : (v<0?"down":"flat")};
+  }
+
+  /* ---------- 加载数据 ---------- */
+  /* 先试 /api/data（服务端会自动抓最新），没有这个接口就退回静态 data.json */
+  function getJSON(url){
+    return fetch(url, {cache:"no-store"}).then(function(r){
+      if(!r.ok) throw new Error("HTTP " + r.status);
+      return r.json();
+    });
+  }
+
+  function load(fresh){
+    var bust = fresh ? ("?t=" + Date.now()) : "";
+    return getJSON(API_URL + bust)
+      .catch(function(){ return getJSON(DATA_URL + bust); })
+      .then(function(d){
+        DATA = d;
+        localStorage.setItem("lastData", JSON.stringify(d));
+        render();
+      }).catch(function(e){
+        var cached = localStorage.getItem("lastData");
+        if(cached){
+          try{
+            DATA = JSON.parse(cached);
+            render(true);
+            return;
+          }catch(_){}
+        }
+        app.innerHTML = '<div class="empty">暂时读取不到数据<br>请检查网络后点右上角 ⟳ 重试<br><span style="font-size:12px;color:#b3b9c2">' + esc(e.message) + '</span></div>';
+        upd.textContent = "加载失败";
+        dot.className = "dot off";
+      });
+  }
+
+  /* ---------- 底部导航 ---------- */
+  function buildNav(){
+    if(!DATA) return;
+    nav.innerHTML = DATA.categories.map(function(c){
+      return '<button class="tab' + (c.id===CUR ? " on" : "") + '" data-id="' + c.id + '">' +
+        '<span class="ic">' + (ICONS[c.id] || "•") + '</span>' + esc(c.name) + '</button>';
+    }).join("");
+  }
+
+  /* ---------- 渲染 ---------- */
+  function render(stale){
+    if(!DATA) return;
+    var cats = DATA.categories || [];
+    if(!CUR){
+      var h = (location.hash || "").replace("#", "");
+      if(h && cats.some(function(c){return c.id===h;})) CUR = h;
+    }
+    if(!CUR || !cats.some(function(c){return c.id===CUR;})) CUR = cats[0].id;
+    buildNav();
+    upd.innerHTML = "更新于 " + esc(DATA.generated_at_text || "") +
+      (stale ? " · 缓存" : " · 每日自动更新");
+    dot.className = "dot" + (stale ? " off" : "");
+
+    var cat = cats.filter(function(c){return c.id===CUR;})[0];
+    var html = "";
+
+    // 首次进入且非独立模式时，提示安装
+    if(sessionStorage.getItem("noInstallHint")!=="1" && !isStandalone()){
+      html += installHint();
+    }
+    if(cat.error){
+      html += '<div class="warn">此分类本次更新失败（' + esc(cat.error) + '），下面显示的是上一次的数据。</div>';
+    }
+
+    if(cat.type === "prices"){
+      html += renderPrices(cat);
+    }else{
+      html += renderNews(cat);
+    }
+    app.innerHTML = html || '<div class="empty">这个分类暂时没有内容</div>';
+    bind();
+  }
+
+  function isStandalone(){
+    return (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches) ||
+           window.navigator.standalone === true;
+  }
+
+  function installHint(){
+    var ua = navigator.userAgent;
+    var isIOS = /iPad|iPhone|iPod/.test(ua);
+    var tip = isIOS
+      ? '点底部 <b>分享</b> 按钮 → 选 <b>「添加到主屏幕」</b>，桌面上就会出现这个图标，点开是全屏的，没有浏览器地址栏。'
+      : '点右上角 <b>⋮</b> 菜单 → 选 <b>「安装应用」</b> 或 <b>「添加到主屏幕」</b>，之后从桌面图标直接打开。';
+    return '<div class="install"><div>' + tip + '</div><span class="x" id="hintX">✕</span></div>';
+  }
+
+  function renderPrices(cat){
+    var q = Q.trim();
+    var out = "";
+    (cat.groups || []).forEach(function(g){
+      var items = g.items || [];
+      if(q){
+        items = items.filter(function(i){
+          return i.name.toLowerCase().indexOf(q.toLowerCase())>=0 ||
+                 String(i.code).toLowerCase().indexOf(q.toLowerCase())>=0;
+        });
+      }
+      if(!items.length) return;
+      out += '<div class="card"><div class="card-hd">' + esc(g.name) +
+             '<span class="n">' + items.length + ' 个品种</span></div>';
+      items.forEach(function(i){
+        var c = pct(i.chg);
+        var dec = i.price >= 1000 ? 0 : (i.price >= 100 ? 1 : 2);
+        out += '<div class="prow">' +
+                 '<div class="pname"><b>' + esc(i.name) + '</b><i>' + esc(i.code.toUpperCase()) + '</i></div>' +
+                 '<div class="pval"><div class="p ' + c.c + '">' + num(i.price, dec) + '</div>' +
+                 '<div class="c ' + c.c + '">' + c.t + '</div></div>' +
+               '</div>';
+      });
+      out += '</div>';
+    });
+    return out || '<div class="empty">没有匹配的品种</div>';
+  }
+
+  function renderNews(cat){
+    var items = cat.items || [];
+    var q = Q.trim();
+    if(q){
+      items = items.filter(function(i){
+        return (i.title||"").toLowerCase().indexOf(q.toLowerCase())>=0 ||
+               (i.summary||"").toLowerCase().indexOf(q.toLowerCase())>=0;
+      });
+    }
+    if(!items.length) return '<div class="empty">' + (q ? "没有匹配的内容" : "这个分类暂时没有内容") + '</div>';
+    var out = '<div class="card"><div class="card-hd">' + esc(cat.name) +
+              '<span class="n">' + items.length + ' 条</span></div>';
+    items.forEach(function(i){
+      var url = i.url || "";
+      var tag = url ? ' target="_blank" rel="noopener noreferrer"' : "";
+      out += '<a class="nrow" href="' + esc(url || "javascript:void(0)") + '"' + tag + '>' +
+               '<div class="ntitle">' + esc(i.title) + '</div>' +
+               (i.summary ? '<div class="nsum">' + esc(i.summary) + '</div>' : '') +
+               '<div class="nmeta"><span class="tag">' + esc(i.source || "") + '</span>' +
+               '<span>' + esc(i.time_text || "") + '</span></div>' +
+             '</a>';
+    });
+    return out + '</div>';
+  }
+
+  function bind(){
+    var x = document.getElementById("hintX");
+    if(x) x.addEventListener("click", function(ev){
+      ev.preventDefault(); ev.stopPropagation();
+      sessionStorage.setItem("noInstallHint","1");
+      var el = document.querySelector(".install");
+      if(el) el.remove();
+    });
+  }
+
+  /* ---------- 交互 ---------- */
+  nav.addEventListener("click", function(e){
+    var b = e.target.closest(".tab");
+    if(!b) return;
+    CUR = b.dataset.id;
+    Q = "";
+    document.getElementById("q").value = "";
+    if(history.replaceState) history.replaceState(null, "", "#" + CUR);
+    render();
+    window.scrollTo({top:0, behavior:"instant"});
+  });
+
+  document.getElementById("btnSearch").addEventListener("click", function(){
+    var w = document.getElementById("searchwrap");
+    w.classList.toggle("on");
+    if(w.classList.contains("on")) document.getElementById("q").focus();
+  });
+
+  document.getElementById("q").addEventListener("input", function(e){
+    Q = e.target.value;
+    render();
+  });
+
+  document.getElementById("btnRefresh").addEventListener("click", function(){
+    upd.textContent = "正在更新…";
+    load(true);
+  });
+
+  /* 注册 Service Worker（离线可看） */
+  if("serviceWorker" in navigator){
+    window.addEventListener("load", function(){
+      navigator.serviceWorker.register("./sw.js").catch(function(){});
+    });
+  }
+
+  load(false);
+})();
+</script>
+</body>
+</html>

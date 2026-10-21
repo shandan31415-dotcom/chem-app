@@ -1,0 +1,85 @@
+{
+  "_说明": "新闻源配置。enabled=false 可临时关掉某个源；改完直接提交，下次定时任务自动生效。",
+  "news": [
+    {
+      "id": "macro",
+      "name": "宏观快讯",
+      "enabled": true,
+      "type": "wscn",
+      "url": "https://api-one.wallstcn.com/apiv1/content/lives?channel=global-channel&client=pc&limit=30",
+      "source": "华尔街见闻"
+    },
+    {
+      "id": "china",
+      "name": "国内",
+      "enabled": true,
+      "type": "rss",
+      "url": "https://www.chinanews.com.cn/rss/china.xml",
+      "source": "中新网"
+    },
+    {
+      "id": "world",
+      "name": "国际",
+      "enabled": true,
+      "type": "rss",
+      "url": "https://www.chinanews.com.cn/rss/world.xml",
+      "source": "中新网"
+    },
+    {
+      "id": "finance",
+      "name": "财经",
+      "enabled": true,
+      "type": "rss",
+      "url": "https://www.chinanews.com.cn/rss/finance.xml",
+      "source": "中新网"
+    },
+    {
+      "id": "society",
+      "name": "社会",
+      "enabled": true,
+      "type": "rss",
+      "url": "https://www.chinanews.com.cn/rss/society.xml",
+      "source": "中新网"
+    }
+  ],
+  "prices": {
+    "enabled": true,
+    "name": "化工价格",
+    "markets": {
+      "m:113": "上期所",
+      "m:114": "大商所",
+      "m:115": "郑商所",
+      "m:142": "上期能源"
+    },
+    "groups": [
+      {
+        "name": "原油与油品",
+        "items": ["原油", "燃料油", "低硫燃料油", "沥青", "液化石油气"]
+      },
+      {
+        "name": "聚烯烃与氯碱",
+        "items": ["聚乙烯", "聚丙烯", "PVC", "苯乙烯", "烧碱"]
+      },
+      {
+        "name": "聚酯产业链",
+        "items": ["对二甲苯", "PTA", "乙二醇", "短纤", "瓶片"]
+      },
+      {
+        "name": "煤化工与建材",
+        "items": ["甲醇", "尿素", "纯碱", "玻璃", "焦炭", "焦煤"]
+      },
+      {
+        "name": "橡胶与纸浆",
+        "items": ["天然橡胶", "20号胶", "纸浆"]
+      }
+    ],
+    "aliases": {
+      "聚乙烯": ["聚乙烯", "塑料", "LLDPE"],
+      "燃料油": ["燃料油", "燃油"],
+      "天然橡胶": ["天然橡胶", "橡胶"],
+      "液化石油气": ["液化石油气", "液化气", "LPG"],
+      "PTA": ["PTA"],
+      "PVC": ["PVC"]
+    }
+  }
+}
