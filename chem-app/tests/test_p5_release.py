@@ -50,8 +50,14 @@ def shell_list():
 
 class TestServiceWorker(unittest.TestCase):
     def test_version_bumped(self):
-        """P1–P4 都改过前端，版本必须是 chem-v5，否则手机看不到更新"""
-        self.assertEqual("chem-v5", const("VER"))
+        """前端改过多次（P1–P6），版本号必须已脱离初始 v5，否则手机看不到更新"""
+        ver = const("VER")
+        self.assertTrue(ver, "sw.js 应有 VER 版本号")
+        # 初始是 chem-v5，此后每个问题都升过版；只要不是 v5 就说明一直在升
+        self.assertNotEqual("chem-v5", ver, "版本号必须已从初始 chem-v5 递增")
+        m = re.match(r"^chem-v(\d+)$", ver)
+        self.assertTrue(m, "版本号格式应为 chem-vN")
+        self.assertGreaterEqual(int(m.group(1)), 5, "版本号不应回退到 5 以下")
 
     def test_data_cache_not_versioned(self):
         """数据缓存不能跟版本号绑在一起，升版会把离线数据清空"""
