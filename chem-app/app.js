@@ -1909,9 +1909,33 @@
     else location.hash = "#/parks";
   };
 
+  var refreshing = false;
   refreshBtn.onclick = function () {
+    if (refreshing) return;
+    refreshing = true;
+    refreshBtn.classList.add("spin");
+    refreshBtn.disabled = true;
     meta.textContent = "正在更新…";
-    loadAll().then(route);
+    var t0 = Date.now();
+    loadAll().then(function () {
+      route();
+      var cost = Date.now() - t0;
+      var ok = Object.keys(DERR).length === 0;
+      // 至少让转圈动画走满一小段，避免"一闪而过"没感觉
+      var wait = Math.max(0, 600 - cost);
+      setTimeout(function () {
+        refreshBtn.classList.remove("spin");
+        refreshBtn.disabled = false;
+        refreshing = false;
+        meta.textContent = ok
+          ? "已更新 · " + (D.meta && D.meta.updated_at_text || "")
+          : "部分数据更新失败，请检查网络";
+        if (ok) {
+          meta.style.color = "#7ee6c3";
+          setTimeout(function () { meta.style.color = ""; }, 1600);
+        }
+      }, wait);
+    });
   };
 
   favBtn.onclick = function () {

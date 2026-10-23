@@ -34,6 +34,9 @@ header{
   display:flex;align-items:center;justify-content:center}
 .hbtn:active{background:rgba(255,255,255,.28)}
 .hbtn.on{background:#f5c518;color:#3a2f00}
+.hbtn.spin{animation:spin .7s linear infinite}
+.hbtn:disabled{opacity:.7}
+@keyframes spin{to{transform:rotate(360deg)}}
 .hmeta{font-size:11.5px;color:rgba(255,255,255,.5);margin-top:2px;padding-left:2px}
 
 /* ---------- 主体 ---------- */
