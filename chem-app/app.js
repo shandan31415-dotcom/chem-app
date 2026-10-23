@@ -877,6 +877,7 @@
         h += '<a class="row" href="#/park/' + p.id + '">' +
           '<div class="main"><div class="rt">' + esc(p.name) + '</div>' +
           '<div class="rm">' + (lvl ? '<span class="tag ' + lvl + '">' + esc(p.level) + '</span>' : '<span class="tag">' + esc(p.level) + '</span>') +
+          (p.special ? '<span class="tag">专业园区</span>' : '') +
           '<span>' + esc(p.district || "") + '</span>' +
           '<span>' + ents.length + ' 家' + (hp ? ' · 高端 ' + hp : '') + '</span></div>' +
           '<div class="rm">' + esc(p.type || "") + '</div></div>' +
@@ -929,18 +930,24 @@
       '<div class="dsub">' + esc(p.city) + ' · ' + esc(p.district || "") + ' · ' + esc(p.type || "") + '</div>';
     h += '<div class="card"><div class="card-bd" style="padding-bottom:8px">' +
       '<span class="tag ' + (lvl || "") + '" style="font-size:11.5px;padding:3px 9px">' + esc(p.level) + '</span>' +
+      (p.special ? '<span class="tag" style="font-size:11.5px;padding:3px 9px">专业园区</span>' : '') +
       '</div><div class="card-bd" style="font-size:14px;line-height:1.72;padding-top:0">' + esc(p.intro) + '</div></div>';
     h += '<div class="sec-title">园内代表企业 ' + (p.enterprises || []).length + ' 家</div><div class="card">';
-    (p.enterprises || []).forEach(function (e, i) {
-      var dyn = entNews(e);
-      h += '<a class="row" href="#/ent/' + p.id + '/' + i + '">' +
-        '<div class="main"><div class="rt">' + esc(e.name) + '</div>' +
-        '<div class="rm">' + (e.high ? '<span class="tag he">高端</span>' : '') +
-        '<span>' + esc(e.products).slice(0, 38) + '</span>' +
-        (e.verify ? '<span class="tag wr">待核</span>' : '') +
-        (dyn.length ? '<span class="tag cat">动态 ' + dyn.length + '</span>' : '') +
-        '</div></div><span class="arrow">›</span></a>';
-    });
+    if ((p.enterprises || []).length) {
+      (p.enterprises || []).forEach(function (e, i) {
+        var dyn = entNews(e);
+        h += '<a class="row" href="#/ent/' + p.id + '/' + i + '">' +
+          '<div class="main"><div class="rt">' + esc(e.name) + '</div>' +
+          '<div class="rm">' + (e.high ? '<span class="tag he">高端</span>' : '') +
+          '<span>' + esc(e.products).slice(0, 38) + '</span>' +
+          (e.verify ? '<span class="tag wr">待核</span>' : '') +
+          (dyn.length ? '<span class="tag cat">动态 ' + dyn.length + '</span>' : '') +
+          '</div></div><span class="arrow">›</span></a>';
+      });
+    } else {
+      h += '<div class="empty" style="padding:22px 16px">该园区为省级认定化工园区，企业名录整理中。<br>' +
+        '<span style="font-size:12px">有可靠名录后再补齐，不编造</span></div>';
+    }
     h += '</div><div class="hint">整理日期：' + esc(D.parks.updated_at_text || "") + '</div>';
     app.innerHTML = h;
   }

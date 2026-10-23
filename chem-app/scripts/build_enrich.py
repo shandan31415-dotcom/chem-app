@@ -14,6 +14,7 @@ sys.path.insert(0, HERE)
 
 from _data_city import CITY_META          # noqa: E402
 from _data_ent import CITY_ENTS, NEW_PARKS, to_ent  # noqa: E402
+from _data_parks84 import PARKS84, CITY_NAMES       # noqa: E402
 from _data_cat import VAR_ID, SD, EXTRA, GROUPS     # noqa: E402
 
 PRICE_MAP = {
@@ -68,39 +69,97 @@ LEADER_FIX = {
 }
 
 
+# 旧园区名/别名 -> 官方 84 家名单中的规范名（用于继承企业，避免模糊匹配出错）
+PARK_RENAME = {
+    "东营港经济开发区": "东营港化工产业园",
+    "东营利津滨海化工产业园": "利津滨海新区化工产业园",
+    "龙口化工产业园": "山东裕龙石化产业园",
+    "烟台蓬莱化工产业园": "蓬莱化工产业园",
+    "潍坊昌邑下营化工产业园": "昌邑下营化工产业园",
+    "日照岚山临港石化产业园": "岚山化工产业园",
+    "沂水化工产业园": "沂水庐山化工产业园",
+    "临沂郯城化工产业园": "郯城化工产业园",
+    "德州运河经济开发区化工园": "德州运河恒升化工产业园",
+    "聊城化工新材料产业园": "聊城化工产业园",
+}
+
+
+def _park_id(code, name, idx):
+    """生成园区 id：地市拼音缩写 + 序号（稳定可读）"""
+    abbr = {
+        "370100": "jn", "370200": "qd", "370300": "zb", "370400": "zz",
+        "370500": "dy", "370600": "yt", "370700": "wf", "370800": "jn2",
+        "370900": "ta", "371000": "wh", "371100": "rz", "371300": "ly",
+        "371400": "dz", "371500": "lc", "371600": "bz", "371700": "hz",
+    }
+    return "%s-p%02d" % (abbr.get(code, code), idx)
+
+
 def build_parks():
     path = os.path.join(DATA, "parks.json")
     d = json.load(open(path, encoding="utf-8"))
-    cities = d["cities"]
+    old_cities = d["cities"]
 
-    # 1) 地市产业信息
-    for c in cities:
-        m = CITY_META.get(c["code"])
-        if not m:
-            continue
-        c["region"] = m["region"]
-        c["intro"] = m["intro"]
-        c["scale"] = m["scale"]
-        c["clusters"] = m["clusters"]
-        c["chems"] = m["chems"]
-        c["angle"] = m["angle"]
+    # 0) 继承源：旧数据里每个园区的企业 + 详细 intro（按 地市code+园区名 索引）
+    #    先做名称对齐，保证旧数据能正确挂到 84 家规范名上
+    inherit_ents = {}   # (code, 规范名) -> [企业 dict]
+    inherit_intro = {}  # (code, 规范名) -> 旧详细 intro
+    for c in old_cities:
+        for p in c.get("parks", []):
+            name = PARK_RENAME.get(p["name"], p["name"])
+            key = (c["code"], name)
+            inherit_ents[key] = p.get("enterprises", [])
+            inherit_intro[key] = p.get("intro", "")
 
-    by_code = {c["code"]: c for c in cities}
+    # 1) 重建 cities（保留原始 16 地市的元信息，但 parks 全部按 84 家重建）
+    old_by_code = {c["code"]: c for c in old_cities}
+    new_cities = []
+    for c in old_cities:
+        code = c["code"]
+        nc = {k: v for k, v in c.items() if k != "parks"}
+        nc["parks"] = []
+        m = CITY_META.get(code)
+        if m:
+            nc["region"] = m["region"]
+            nc["intro"] = m["intro"]
+            nc["scale"] = m["scale"]
+            nc["clusters"] = m["clusters"]
+            nc["chems"] = m["chems"]
+            nc["angle"] = m["angle"]
+        new_cities.append(nc)
 
-    # 2) 补充园区
-    for pid, code, name, district, typ, level, intro, ents in NEW_PARKS:
+    by_code = {c["code"]: c for c in new_cities}
+
+    # 2) 按 84 家官方名单生成园区，继承旧企业
+    total_parks = 0
+    for code, parks in PARKS84.items():
         c = by_code.get(code)
         if not c:
             continue
-        if any(p["id"] == pid for p in c["parks"]):
-            continue
-        c["parks"].append({
-            "id": pid, "name": name, "district": district, "type": typ,
-            "level": level, "intro": intro,
-            "enterprises": [to_ent(t) for t in ents],
-        })
+        idx = 0
+        for (name, district, typ, is_pro, intro, level) in parks:
+            idx += 1
+            key = (code, name)
+            ents = inherit_ents.get(key, [])
+            # 旧数据里更详尽的 intro 优先于 84 家名单的简略 intro
+            old_intro = inherit_intro.get(key, "")
+            if old_intro and len(old_intro) >= len(intro):
+                intro = old_intro
+            pk = {
+                "id": _park_id(code, name, idx),
+                "name": name,
+                "district": district,
+                "type": typ,
+                "level": level,
+                "intro": intro,
+                "enterprises": ents,
+            }
+            if is_pro:
+                pk["special"] = True
+            c["parks"].append(pk)
+            total_parks += 1
 
-    # 3) 市级重点企业（去重）
+    # 3) 市级重点企业（去重，保留原有市级 enterprises，再补 CITY_ENTS）
     for code, rows in CITY_ENTS.items():
         c = by_code.get(code)
         if not c:
@@ -117,20 +176,23 @@ def build_parks():
             c.setdefault("enterprises", []).append(to_ent(t))
             exists.add(t[0])
 
+    d["cities"] = new_cities
+
     # 4) 统计与署名（PRD 7.2：每个数据文件都必须带 updated_at）
     d["updated_at"] = int(time.time())
-    d["updated_at_text"] = "2026-10-21"
-    d["source"] = "人工整理 + 资料库《山东化工产业地图》《化工品种速查手册》"
-    d["note"] = ("以地市为单位的化工产业与企业整理，不限高端化工，覆盖全省化工主要企业。" 
-                 "园区归属、产品范围为人工整理，标注「待核」的条目建议以官方公示核对；"
-                 "本名录为「重点/代表性企业」，不是全量工商名录。"
-                 "企业动态由资讯流自动匹配，匹配不到会明确显示「暂无收录」，不做编造。")
-    tot_p = sum(len(c["parks"]) for c in cities)
-    tot_e = sum(len(p["enterprises"]) for c in cities for p in c["parks"]) + \
-        sum(len(c.get("enterprises", [])) for c in cities)
-    d["counts"] = {"cities": len(cities), "parks": tot_p, "ents": tot_e}
+    d["updated_at_text"] = "2026-10-23"
+    d["source"] = "人工整理 + 资料库《山东化工产业地图》《化工品种速查手册》 + 山东省工信厅官方认定名单"
+    d["note"] = ("山东省经认定的化工园区共 84 家（原 85 家中高密仁和化工产业园已取消资格，按 84 家计）。"
+                 "本名录覆盖全部 84 家园区、16 地市；专业化工园区单独标注。"
+                 "园区内企业为「重点/代表性企业」人工整理，不是全量工商名录，新增园区暂未收录企业的显示「名录整理中」，不做编造。"
+                 "园区归属、区县以官方最新公示为准，标注「待核」的条目建议核对。")
+    tot_p = sum(len(c["parks"]) for c in new_cities)
+    tot_e = sum(len(p["enterprises"]) for c in new_cities for p in c["parks"]) + \
+        sum(len(c.get("enterprises", [])) for c in new_cities)
+    d["counts"] = {"cities": len(new_cities), "parks": tot_p, "ents": tot_e}
     json.dump(d, open(path, "w", encoding="utf-8"), ensure_ascii=False, indent=1)
-    print("parks.json ->  地市 %d / 园区 %d / 企业 %d" % (len(cities), tot_p, tot_e))
+    print("parks.json ->  地市 %d / 园区 %d / 企业 %d（继承 %d，新园区 %d）"
+          % (len(new_cities), tot_p, tot_e, sum(len(v) for v in inherit_ents.values()), tot_p - len(inherit_ents)))
 
 
 def build_cats():
