@@ -332,6 +332,37 @@ def a11_boards():
     return (not bad), (detail if not bad else "; ".join(bad[:8]))
 
 
+def a12_chain():
+    cd, e1 = try_load("chain.json")
+    cats, e2 = try_load("categories.json")
+    if cd is None or cats is None:
+        return False, "数据不可用: %s %s" % (e1, e2)
+    stages = cd.get("stages", [])
+    all_ids = {it.get("id") for it in cats.get("items", [])}
+    bad = []
+    if len(stages) != 3:
+        bad.append("产业链环节 %d（应 3）" % len(stages))
+    need = {"up", "mid", "down"}
+    keys = {s.get("key") for s in stages}
+    if keys != need:
+        bad.append("环节 key 不符：%s" % (keys - need or need - keys))
+    assigned = set()
+    for s in stages:
+        if not s.get("name") or not s.get("desc"):
+            bad.append("%s 缺 name/desc" % s.get("key"))
+        for cid in s.get("cats") or []:
+            if cid not in all_ids:
+                bad.append("%s 引用了不存在的品类 %s" % (s.get("key"), cid))
+            if cid in assigned:
+                bad.append("品类 %s 重复归类" % cid)
+            assigned.add(cid)
+    missing = all_ids - assigned
+    if missing:
+        bad.append("未归类的品类 " + ",".join(sorted(missing)[:6]))
+    detail = "三段齐全，品类覆盖 %d/%d" % (len(assigned), len(all_ids))
+    return (not bad), (detail if not bad else "; ".join(bad[:8]))
+
+
 CHECKS = [
     ("1 数据文件含 updated_at", a1_files),
     ("2 地市五字段齐全", a2_city_fields),
@@ -344,6 +375,7 @@ CHECKS = [
     ("9 品种关联新闻覆盖", a9_price_news),
     ("10 产业格局数据完整", a10_industry),
     ("11 七大板块归类完整", a11_boards),
+    ("12 产业链三段归类完整", a12_chain),
 ]
 
 

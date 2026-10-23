@@ -9,15 +9,15 @@
   var D = { news: null, prices: null, hist: null, cats: null, parks: null, policies: null, meta: null, map: null };
   var DERR = {};   // 各数据文件本次更新失败原因（后端 save_or_keep 写入的 error）
   var DUPD = {};   // 各数据文件自己的更新时间
-  var UI = { block: null, city: "", level: null, q: "", mq: "", cq: "", pq: "", mview: "heat" };
+  var UI = { block: null, city: "", level: null, q: "", mq: "", cq: "", pq: "", mview: "heat", chain: "" };
   var CUR = { key: null, type: null };
 
   var FILE_LABEL = { news: "资讯", prices: "行情", prices_history: "K线",
                      categories: "品类", parks: "地图", policies: "政策", industry: "产业格局",
-                     boards: "七大板块" };
+                     boards: "七大板块", chain: "产业链" };
   // 每个模块依赖哪些数据文件（决定在哪个页面提示「本次更新失败」）
   var MOD_FILES = {
-    news: ["news"], prices: ["prices", "prices_history"], cats: ["categories", "boards"],
+    news: ["news"], prices: ["prices", "prices_history"], cats: ["categories", "boards", "chain"],
     parks: ["parks", "industry"], policies: ["policies"]
   };
 
@@ -127,7 +127,7 @@
   }
 
   /* ------------------------------------------------ 数据装载 */
-  var FILES = ["news", "prices", "prices_history", "categories", "parks", "policies", "meta", "sdmap", "industry", "boards"];
+  var FILES = ["news", "prices", "prices_history", "categories", "parks", "policies", "meta", "sdmap", "industry", "boards", "chain"];
   function loadAll() {
     return Promise.all(FILES.map(function (f) {
       return fetch("data/" + f + ".json?_=" + Date.now())
@@ -136,7 +136,7 @@
     })).then(function (arr) {
       D.news = arr[0]; D.prices = arr[1]; D.hist = arr[2];
       D.cats = arr[3]; D.parks = arr[4]; D.policies = arr[5]; D.meta = arr[6];
-      D.map = arr[7]; D.industry = arr[8]; D.boards = arr[9];
+      D.map = arr[7]; D.industry = arr[8]; D.boards = arr[9]; D.chain = arr[10];
       IDX = null;
       DERR = {}; DUPD = {};
       FILES.forEach(function (f, i) {
@@ -1122,6 +1122,18 @@
   }
 
   /* ------------------------------------------------ 品类 */
+  function chainStages() {
+    if (D.chain && D.chain.stages) return D.chain.stages;
+    return [];
+  }
+  function chainStageOf(id) {
+    var st = chainStages();
+    for (var i = 0; i < st.length; i++) {
+      if ((st[i].cats || []).indexOf(id) >= 0) return st[i];
+    }
+    return null;
+  }
+
   function viewCats() {
     setHeader("化工品类", {});
     if (!D.cats) { app.innerHTML = '<div class="empty">品类数据未加载</div>'; return; }
@@ -1141,8 +1153,33 @@
       h += '</div></div>';
     }
 
+    /* ---- 产业链上中下游入口 ---- */
+    var stages = chainStages();
+    if (stages.length) {
+      h += '<div class="sec-title">产业链位置 <span class="subtle">上中下游 · 点一段看该环节全部品类</span></div>';
+      h += '<div class="card"><div class="chainbar">';
+      stages.forEach(function (s) {
+        h += '<a class="chain-node chain-' + s.key + '" href="#/chain/' + s.key + '">' +
+          '<div class="cn">' + esc(s.short) + '</div>' +
+          '<div class="cs">' + (s.cats || []).length + ' 品类</div></a>';
+      });
+      h += '</div></div>';
+    }
+
     var q = (UI.cq || "").trim().toLowerCase();
     var total = D.cats.items.length;
+
+    /* ---- 产业链筛选按钮（有产业链数据时显示） ---- */
+    var chainFilter = UI.chain || "";
+    if (stages.length && !q) {
+      h += '<div class="chips" style="margin-top:2px">';
+      h += '<button class="chip' + (chainFilter === "" ? " on" : "") + '" data-ch="">全部</button>';
+      stages.forEach(function (s) {
+        h += '<button class="chip' + (chainFilter === s.key ? " on" : "") + '" data-ch="' + s.key + '">' +
+          esc(s.short) + '</button>';
+      });
+      h += '</div>';
+    }
 
     if (q) {
       var hits = D.cats.items.filter(function (c) {
@@ -1165,14 +1202,25 @@
       }
     } else {
       D.cats.groups.forEach(function (g) {
-        h += '<div class="sec-title">' + esc(g.name) + ' <span class="subtle">' + g.items.length + '</span></div><div class="card">';
-        g.items.forEach(function (id) {
+        // 产业链筛选：只显示属于当前段的品类
+        var ids = g.items;
+        if (chainFilter) {
+          var st = null;
+          stages.forEach(function (s) { if (s.key === chainFilter) st = s; });
+          if (st) ids = g.items.filter(function (id) { return (st.cats || []).indexOf(id) >= 0; });
+        }
+        if (!ids.length) return;
+        h += '<div class="sec-title">' + esc(g.name) + ' <span class="subtle">' + ids.length + '</span></div><div class="card">';
+        ids.forEach(function (id) {
           var c = catById(id);
           if (!c) return;
           var done = has(S.learned, c.id);
+          var ch = chainStageOf(c.id);
           h += '<a class="row" href="#/cat/' + c.id + '">' +
             '<div class="main"><div class="rt">' + esc(c.name) + (done ? ' <span class="tag cat">已学</span>' : '') + '</div>' +
-            '<div class="rm">' + esc(c.one_line) + '</div></div><span class="arrow">›</span></a>';
+            '<div class="rm">' + esc(c.one_line) + '</div></div>' +
+            (ch ? '<span class="tag chg chg-' + ch.key + '">' + esc(ch.short) + '</span>' : '') +
+            '<span class="arrow">›</span></a>';
         });
         h += '</div>';
       });
@@ -1190,6 +1238,12 @@
       var pos = qi.selectionStart; viewCats();
       var n = $("cq"); if (n) { n.focus(); try { n.setSelectionRange(pos, pos); } catch (e) {} }
     };
+    app.querySelectorAll(".chips .chip").forEach(function (b) {
+      b.onclick = function () {
+        UI.chain = b.dataset.ch || "";
+        viewCats();
+      };
+    });
   }
 
   function viewCat(id) {
@@ -1205,6 +1259,12 @@
       ["山东的位置", c.shandong], ["流向", c.flow], ["储运门槛", c.logistics]
     ];
     var h = '<div class="dt">' + esc(c.name) + '</div><div class="dsub">' + esc(c.one_line) + '</div>';
+    var ch = chainStageOf(c.id);
+    if (ch) {
+      h += '<div class="card" style="padding:8px 12px">' +
+        '<span class="tag chg chg-' + ch.key + '" style="font-size:12px;padding:4px 10px">产业链 · ' + esc(ch.short) + '</span> ' +
+        '<span style="font-size:12px;color:var(--sub)">' + esc(ch.desc) + '</span></div>';
+    }
     h += '<div class="card">';
     fields.forEach(function (f) {
       h += '<div class="field"><div class="fk">' + f[0] + '</div><div class="fv">' + esc(f[1]) + '</div></div>';
@@ -1317,6 +1377,46 @@
 
     h += '<div class="hint">板块归类为人工整理（73 个品类各归一个主板块），仅供参考；' +
       '数据来源：' + esc(D.boards && D.boards.source ? D.boards.source : "人工整理") + '</div>';
+
+    h += disclaimer();
+    app.innerHTML = h;
+  }
+
+  /* 产业链段详情：上/中/下游 · 该环节说明 + 全部品类 */
+  function viewChain(key) {
+    var s = null;
+    chainStages().forEach(function (x) { if (x.key === key) s = x; });
+    if (!s) { app.innerHTML = '<div class="empty">未找到该产业链环节</div>'; return; }
+    setHeader(s.short + " · 产业链", { back: true });
+
+    var h = '<div class="dt">' + esc(s.name) + '</div>' +
+      '<div class="dsub">化工产业链' + esc(s.short) + '环节 · ' + (s.cats || []).length + ' 个品类</div>';
+
+    h += '<div class="card"><div class="card-hd">环节说明</div>' +
+      '<div class="card-bd" style="font-size:14px;line-height:1.72">' + esc(s.desc || "") + '</div></div>';
+
+    /* 三段导航，可快速切换 */
+    h += '<div class="sec-title">产业链位置 <span class="subtle">点一段切换</span></div>';
+    h += '<div class="card"><div class="chainbar">';
+    chainStages().forEach(function (x) {
+      h += '<a class="chain-node chain-' + x.key + (x.key === key ? " on" : "") + '" href="#/chain/' + x.key + '">' +
+        '<div class="cn">' + esc(x.short) + '</div>' +
+        '<div class="cs">' + (x.cats || []).length + ' 品类</div></a>';
+    });
+    h += '</div></div>';
+
+    h += '<div class="sec-title">本环节品类 <span class="subtle">点进去看六问与代表产品</span></div><div class="card">';
+    (s.cats || []).forEach(function (id) {
+      var c = catById(id);
+      if (!c) return;
+      h += '<a class="row" href="#/cat/' + c.id + '">' +
+        '<div class="main"><div class="rt">' + esc(c.name) + '</div>' +
+        '<div class="rm">' + esc(c.one_line || '') + '</div></div><span class="arrow">›</span></a>';
+    });
+    h += '</div>';
+
+    h += '<div class="hint">产业链划分为人工整理（73 个品类各归一个主环节），同一品种在不同语境位置可能不同，' +
+      '以撮合场景下的主定位为准，仅供参考。</div>';
 
     h += disclaimer();
     app.innerHTML = h;
@@ -1786,6 +1886,7 @@
     else if (seg === "cats") viewCats();
     else if (seg === "cat") viewCat(p[1]);
     else if (seg === "board") viewBoard(p[1]);
+    else if (seg === "chain") viewChain(p[1]);
     else if (seg === "prices") viewPrices();
     else if (seg === "price") viewPrice(decodeURIComponent(p[1] || ""));
     else if (seg === "policies") viewPolicies();

@@ -1,0 +1,49 @@
+{
+  "updated_at": 1750000000,
+  "updated_at_text": "2026-10-23",
+  "source": "人工整理：化工产业链上中下游划分（上游=基础原料、中游=中间体与大宗化学品、下游=终端材料与制品）",
+  "note": "化工品链条长、同一品种在不同语境可处不同位置，本归类以「该品类在山东交易/撮合场景下的主定位」为准，仅供参考。",
+  "stages": [
+    {
+      "key": "up",
+      "name": "上游 · 基础原料",
+      "short": "上游",
+      "desc": "石油、煤炭、原盐、天然气等资源加工出的基础化学品，是整条产业链的起点，量大价低、跟着资源价格走。",
+      "cats": [
+        "refining", "px", "methanol", "benzene", "propylene", "sm", "coke", "mtbe",
+        "chloralkali", "soda", "cl2", "bromine", "acid",
+        "fertilizer", "phosphate", "potash", "needlcoke"
+      ]
+    },
+    {
+      "key": "mid",
+      "name": "中游 · 中间体与大宗化学品",
+      "short": "中游",
+      "desc": "由上游基础原料进一步反应得到的中间体、单体和大宗化学品，是承上启下的关键环节，技术壁垒与集中度开始抬升。",
+      "cats": [
+        "phenol", "pta", "meg", "cpl", "po", "polyether",
+        "mdi_agg", "mdi_pure", "tdi", "organosilicon", "epoxy",
+        "plasticizer", "tio2", "carbonblack", "rubberchem", "sr",
+        "intermediate", "dye", "glyphosate", "pesticide", "compoundfert",
+        "dmc_solvent", "lipf6"
+      ]
+    },
+    {
+      "key": "down",
+      "name": "下游 · 终端材料与制品",
+      "short": "下游",
+      "desc": "贴近最终消费的材料与制品，直接面向汽车、家电、电子、纺织、建筑、医药等终端行业，品牌与渠道更重要。",
+      "cats": [
+        "polyurethane", "fluorosilicon", "nylon", "engplastic", "polyolefin",
+        "degradable", "poe", "pvdf", "peek", "aramid",
+        "pp", "pe", "pvc", "abs", "ps", "eva",
+        "polyester", "spandex",
+        "tire",
+        "electronic", "esg", "wetchem", "photoresist", "membrane", "carbonfiber",
+        "coating", "waterchem", "pharma",
+        "lithium", "solar",
+        "r32", "r125", "refrigerants"
+      ]
+    }
+  ]
+}

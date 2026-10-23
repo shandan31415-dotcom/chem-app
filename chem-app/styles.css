@@ -284,5 +284,27 @@ nav{position:fixed;left:0;right:0;bottom:0;z-index:50;display:flex;
 .board-node .bn{font-size:14px;font-weight:600;color:var(--accent)}
 .board-node .bc{font-size:11px;color:var(--muted)}
 
+/* ---------- 产业链上中下游 ---------- */
+.chainbar{display:flex;gap:8px;padding:12px}
+.chain-node{flex:1 1 30%;min-width:92px;display:flex;flex-direction:column;align-items:center;
+  justify-content:center;gap:4px;padding:14px 8px;border:1px solid var(--line);
+  border-radius:12px;background:#fff;text-align:center;transition:all .15s}
+.chain-node:active{transform:scale(.97)}
+.chain-node .cn{font-size:15px;font-weight:700}
+.chain-node .cs{font-size:11px;color:var(--muted)}
+.chain-node.chain-up{border-color:#d9e8f5;background:#f4f9fd}
+.chain-node.chain-up .cn{color:#2f6fa7}
+.chain-node.chain-mid{border-color:#e7ecf0;background:#f7f9fa}
+.chain-node.chain-mid .cn{color:#5a6b76}
+.chain-node.chain-down{border-color:#e4efe9;background:#f4faf6}
+.chain-node.chain-down .cn{color:#3f8474}
+.chain-node.on{border-width:2px;box-shadow:0 0 0 3px rgba(63,132,116,.08)}
+
+/* 品类行上的产业链位置小标签 */
+.tag.chg{font-weight:600;padding:2px 7px;border-radius:6px;font-size:10.5px;flex:0 0 auto}
+.tag.chg-up{background:#eaf3fb;color:#2f6fa7}
+.tag.chg-mid{background:#eef1f3;color:#5a6b76}
+.tag.chg-down{background:#e8f4ee;color:#3f8474}
+
 /* ---------- 免责声明（所有模块底部统一） ---------- */
 .disclaimer{font-size:11px;color:var(--muted);line-height:1.6;padding:10px 14px 6px;text-align:center}
