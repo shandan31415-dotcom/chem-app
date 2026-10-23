@@ -1,6 +1,6 @@
 /* 版本号：每次改 app.js / styles.css / index.html 都必须升这个值，
    否则手机上打开的还是缓存里的旧文件（开发计划 P5-1）。*/
-const VER = "chem-v6";
+const VER = "chem-v7";
 const DATA = "chem-data";   // 数据缓存不跟版本走：升版不该把离线数据清空
 const SHELL = [
   "./", "./index.html", "./app.js", "./styles.css",

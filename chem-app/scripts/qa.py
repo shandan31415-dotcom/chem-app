@@ -82,7 +82,7 @@ def all_ents(p):
 # ------------------------------------------------------------------ 断言
 def a1_files():
     names = ["meta.json", "overview.json", "news.json", "parks.json", "categories.json",
-             "prices.json", "prices_history.json", "policies.json", "sdmap.json"]
+             "prices.json", "prices_history.json", "policies.json", "sdmap.json", "industry.json"]
     bad = []
     for n in names:
         if n == "overview.json":
@@ -247,6 +247,54 @@ def a9_price_news():
     return (len(withn) >= 15), detail
 
 
+def a10_industry():
+    d, err = try_load("industry.json")
+    if d is None:
+        return False, "industry.json 不可用: %s" % err
+    # 合法地市 code（与 parks.json 一致）
+    pd, e2 = try_load("parks.json")
+    if pd is None:
+        return False, "parks.json 不可用: %s" % e2
+    valid_codes = {c.get("code") for c in pd.get("cities", [])}
+    views = d.get("views", {})
+    bad = []
+    for vk in ["cluster", "layout"]:
+        v = views.get(vk)
+        if not v:
+            bad.append("缺视图 " + vk)
+            continue
+        legend = v.get("legend") or []
+        if not legend:
+            bad.append(vk + " 无 legend")
+        # legend key 唯一 + 有 color
+        keys = [l.get("key") for l in legend]
+        if len(keys) != len(set(keys)):
+            bad.append(vk + " legend key 重复")
+        for l in legend:
+            if not l.get("color") or not l.get("name"):
+                bad.append(vk + " legend 缺 color/name")
+        cities = v.get("cities") or {}
+        # 每个地市都应有归属，且 code 合法、标签在 legend 内
+        for code, tags in cities.items():
+            if code not in valid_codes:
+                bad.append(vk + " 非法 code " + str(code))
+            if not tags or not isinstance(tags, list):
+                bad.append(vk + " %s 无标签" % code)
+            else:
+                for t in tags:
+                    if t not in keys:
+                        bad.append(vk + " %s 标签 %s 不在 legend" % (code, t))
+        # 覆盖度：16 地市都应出现
+        missing = valid_codes - set(cities.keys())
+        if missing:
+            bad.append(vk + " 漏地市 " + ",".join(sorted(missing)))
+    detail = "两视图齐全，地市覆盖 %d/%d" % (
+        len(valid_codes - ({c for c in views.get('cluster', {}).get('cities', {})} |
+                           {c for c in views.get('layout', {}).get('cities', {})})),
+        len(valid_codes))
+    return (not bad), (detail if not bad else "; ".join(bad[:8]))
+
+
 CHECKS = [
     ("1 数据文件含 updated_at", a1_files),
     ("2 地市五字段齐全", a2_city_fields),
@@ -257,6 +305,7 @@ CHECKS = [
     ("7 政策两级齐全", a7_policies),
     ("8 资讯三板块条数", a8_news_blocks),
     ("9 品种关联新闻覆盖", a9_price_news),
+    ("10 产业格局数据完整", a10_industry),
 ]
 
 

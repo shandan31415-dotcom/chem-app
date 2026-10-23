@@ -9,15 +9,15 @@
   var D = { news: null, prices: null, hist: null, cats: null, parks: null, policies: null, meta: null, map: null };
   var DERR = {};   // 各数据文件本次更新失败原因（后端 save_or_keep 写入的 error）
   var DUPD = {};   // 各数据文件自己的更新时间
-  var UI = { block: null, city: "", level: null, q: "", mq: "", cq: "", pq: "" };
+  var UI = { block: null, city: "", level: null, q: "", mq: "", cq: "", pq: "", mview: "heat" };
   var CUR = { key: null, type: null };
 
   var FILE_LABEL = { news: "资讯", prices: "行情", prices_history: "K线",
-                     categories: "品类", parks: "地图", policies: "政策" };
+                     categories: "品类", parks: "地图", policies: "政策", industry: "产业格局" };
   // 每个模块依赖哪些数据文件（决定在哪个页面提示「本次更新失败」）
   var MOD_FILES = {
     news: ["news"], prices: ["prices", "prices_history"], cats: ["categories"],
-    parks: ["parks"], policies: ["policies"]
+    parks: ["parks", "industry"], policies: ["policies"]
   };
 
   /* ------------------------------------------------ 本地存储 */
@@ -126,7 +126,7 @@
   }
 
   /* ------------------------------------------------ 数据装载 */
-  var FILES = ["news", "prices", "prices_history", "categories", "parks", "policies", "meta", "sdmap"];
+  var FILES = ["news", "prices", "prices_history", "categories", "parks", "policies", "meta", "sdmap", "industry"];
   function loadAll() {
     return Promise.all(FILES.map(function (f) {
       return fetch("data/" + f + ".json?_=" + Date.now())
@@ -135,7 +135,7 @@
     })).then(function (arr) {
       D.news = arr[0]; D.prices = arr[1]; D.hist = arr[2];
       D.cats = arr[3]; D.parks = arr[4]; D.policies = arr[5]; D.meta = arr[6];
-      D.map = arr[7];
+      D.map = arr[7]; D.industry = arr[8];
       IDX = null;
       DERR = {}; DUPD = {};
       FILES.forEach(function (f, i) {
@@ -564,15 +564,38 @@
   }
 
   /* ------------------------------------------------ 园区地图 */
-  function mapSVG(st) {
+  // 视图切换：heat=高端热力(默认) / cluster=五大产业集群 / layout=1+3+2布局
+  function mapViewInfo(view) {
+    if (!D.industry || !D.industry.views) return null;
+    if (view === "cluster") return D.industry.views.cluster;
+    if (view === "layout") return D.industry.views.layout;
+    return null;
+  }
+
+  function mapSVG(st, view) {
     var m = D.map;
     if (!m || !m.cities) return '<div class="empty">地图数据未加载</div>';
     var codes = Object.keys(m.cities);
+    var vi = mapViewInfo(view);
+    // 颜色索引：key -> color
+    var cmap = {};
+    if (vi) vi.legend.forEach(function (l) { cmap[l.key] = l.color; });
     var s = '<svg class="sdmap" viewBox="' + m.viewBox + '" preserveAspectRatio="xMidYMid meet">';
     codes.forEach(function (code) {
       var c = m.cities[code];
       var d = st[code] || { high: 0 };
-      s += '<path d="' + c.d + '" class="mct t' + heatLevel(d.high) + '" data-code="' + code + '"></path>';
+      var cls, fill;
+      if (vi) {
+        var keys = vi.cities[code] || [];
+        var k = keys[0] || "";
+        fill = cmap[k] || "#e9edf0";
+        cls = "mct vw-" + view + (k ? " has-" + k : "");
+      } else {
+        fill = "";
+        cls = "mct t" + heatLevel(d.high);
+      }
+      var stAttr = fill ? ' style="fill:' + fill + '"' : "";
+      s += '<path d="' + c.d + '" class="' + cls + '" data-code="' + code + '"' + stAttr + '></path>';
     });
     codes.forEach(function (code) {
       var c = m.cities[code];
@@ -607,6 +630,24 @@
       }
     });
     s += '</svg>';
+    return s;
+  }
+
+  // 图例 HTML：热力或产业视图
+  function mapLegend(view) {
+    var vi = mapViewInfo(view);
+    if (!vi) {
+      return '<div class="legend"><span class="lg">高端企业</span>' +
+        '<i class="sw t0"></i><span>0</span>' +
+        '<i class="sw t1"></i><span>1</span>' +
+        '<i class="sw t2"></i><span>2–3</span>' +
+        '<i class="sw t3"></i><span>4+</span></div>';
+    }
+    var s = '<div class="legend"><span class="lg">' + esc(vi.title) + '</span>';
+    vi.legend.forEach(function (l) {
+      s += '<i class="sw" style="background:' + l.color + '"></i><span>' + esc(l.name) + '</span>';
+    });
+    s += '</div>';
     return s;
   }
 
@@ -708,13 +749,23 @@
     h += '<div id="mres"></div>';
 
     h += '<div id="mmain">';
-    h += '<div class="mapcard">' + mapSVG(st) +
-      '<div class="legend"><span class="lg">高端企业</span>' +
-      '<i class="sw t0"></i><span>0</span>' +
-      '<i class="sw t1"></i><span>1</span>' +
-      '<i class="sw t2"></i><span>2–3</span>' +
-      '<i class="sw t3"></i><span>4+</span>' +
-      '</div></div>';
+
+    /* ---- 视图切换：高端热力 / 产业集群 / 产业布局 ---- */
+    var views = [
+      { k: "heat", n: "高端热力" },
+      { k: "cluster", n: "产业集群" },
+      { k: "layout", n: "产业布局" }
+    ];
+    var hasInd = !!(D.industry && D.industry.views);
+    if (!hasInd && UI.mview !== "heat") UI.mview = "heat";
+    h += '<div class="mviews">' + views.map(function (v) {
+      var dis = (v.k !== "heat" && !hasInd) ? ' disabled' : '';
+      var on = (UI.mview === v.k) ? ' on' : '';
+      return '<button class="mvt' + on + '" data-mv="' + v.k + '"' + dis + '>' + v.n + '</button>';
+    }).join("") + '</div>';
+
+    h += '<div class="mapcard" id="mapbox">' + mapSVG(st, UI.mview) +
+      mapLegend(UI.mview) + '</div>';
 
     h += '<div class="card kpis">' +
       '<div class="kp"><b>16</b><span>地市</span></div>' +
@@ -771,6 +822,30 @@
         if (t && t.dataset && t.dataset.code) location.hash = "#/city/" + t.dataset.code;
       });
     }
+
+    /* ---- 视图切换（局部重绘地图，不整页刷新） ---- */
+    Array.prototype.forEach.call(app.querySelectorAll(".mvt"), function (b) {
+      b.onclick = function () {
+        if (b.disabled) return;
+        var v = b.dataset.mv;
+        if (UI.mview === v) return;
+        UI.mview = v;
+        Array.prototype.forEach.call(app.querySelectorAll(".mvt"), function (x) {
+          x.classList.toggle("on", x.dataset.mv === v);
+        });
+        var box2 = $("mapbox");
+        if (box2) box2.innerHTML = mapSVG(cityStats(), v) + mapLegend(v);
+        // 重新绑定地图点击
+        var svg2 = app.querySelector(".sdmap");
+        if (svg2) {
+          svg2.addEventListener("click", function (e) {
+            var t = e.target;
+            while (t && t !== svg2 && !(t.dataset && t.dataset.code)) t = t.parentNode;
+            if (t && t.dataset && t.dataset.code) location.hash = "#/city/" + t.dataset.code;
+          });
+        }
+      };
+    });
 
     /* ---- 搜索交互（局部刷新，不打断输入） ---- */
     var qi = $("mq"), box = $("mres"), main = $("mmain"), clr = $("mqx");
