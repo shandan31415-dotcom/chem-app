@@ -82,7 +82,8 @@ def all_ents(p):
 # ------------------------------------------------------------------ 断言
 def a1_files():
     names = ["meta.json", "overview.json", "news.json", "parks.json", "categories.json",
-             "prices.json", "prices_history.json", "policies.json", "sdmap.json", "industry.json"]
+             "prices.json", "prices_history.json", "policies.json", "sdmap.json", "industry.json",
+             "boards.json"]
     bad = []
     for n in names:
         if n == "overview.json":
@@ -295,6 +296,42 @@ def a10_industry():
     return (not bad), (detail if not bad else "; ".join(bad[:8]))
 
 
+def a11_boards():
+    bd, e1 = try_load("boards.json")
+    cd, e2 = try_load("categories.json")
+    if bd is None or cd is None:
+        return False, "数据不可用: %s %s" % (e1, e2)
+    boards = bd.get("boards", [])
+    all_ids = {it.get("id") for it in cd.get("items", [])}
+    bad = []
+    if len(boards) != 7:
+        bad.append("板块 %d（应 7）" % len(boards))
+    # 七大板块名称（PPT 第 17 页口径）
+    need = {"炼化", "化肥", "无机化工", "有机化工", "橡胶加工", "精细化工", "合成材料"}
+    names = {b.get("name") for b in boards}
+    if names != need:
+        bad.append("板块名不符：%s" % (names - need or need - names))
+    assigned = set()
+    for b in boards:
+        if not b.get("key") or not b.get("intro"):
+            bad.append("%s 缺 key/intro" % b.get("name"))
+        if len(b.get("leaders") or []) < 3:
+            bad.append("%s 标杆企业 <3" % b.get("name"))
+        if len(b.get("cat_ids") or []) < 1:
+            bad.append("%s 无品类" % b.get("name"))
+        for cid in b.get("cat_ids") or []:
+            if cid not in all_ids:
+                bad.append("%s 引用了不存在的品类 %s" % (b.get("name"), cid))
+            assigned.add(cid)
+    missing = all_ids - assigned
+    if missing:
+        bad.append("未归类的品类 " + ",".join(sorted(missing)[:6]))
+    if len(assigned) != len(all_ids):
+        bad.append("品类重复归类")
+    detail = "七板块齐全，品类覆盖 %d/%d" % (len(assigned), len(all_ids))
+    return (not bad), (detail if not bad else "; ".join(bad[:8]))
+
+
 CHECKS = [
     ("1 数据文件含 updated_at", a1_files),
     ("2 地市五字段齐全", a2_city_fields),
@@ -306,6 +343,7 @@ CHECKS = [
     ("8 资讯三板块条数", a8_news_blocks),
     ("9 品种关联新闻覆盖", a9_price_news),
     ("10 产业格局数据完整", a10_industry),
+    ("11 七大板块归类完整", a11_boards),
 ]
 
 

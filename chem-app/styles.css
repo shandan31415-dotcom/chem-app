@@ -275,5 +275,14 @@ nav{position:fixed;left:0;right:0;bottom:0;z-index:50;display:flex;
 /* ---------- 企业动态：超过 3 个月的降权 ---------- */
 .rm .old{color:var(--muted)}
 
+/* ---------- 七大板块树状图 ---------- */
+.boards{display:flex;flex-wrap:wrap;gap:8px;padding:12px}
+.board-node{flex:1 1 30%;min-width:96px;display:flex;flex-direction:column;align-items:center;
+  justify-content:center;gap:4px;padding:14px 8px;border:1px solid var(--line);
+  border-radius:12px;background:#fff;text-align:center;transition:all .15s}
+.board-node:active{transform:scale(.97)}
+.board-node .bn{font-size:14px;font-weight:600;color:var(--accent)}
+.board-node .bc{font-size:11px;color:var(--muted)}
+
 /* ---------- 免责声明（所有模块底部统一） ---------- */
 .disclaimer{font-size:11px;color:var(--muted);line-height:1.6;padding:10px 14px 6px;text-align:center}

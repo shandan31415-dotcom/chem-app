@@ -13,10 +13,11 @@
   var CUR = { key: null, type: null };
 
   var FILE_LABEL = { news: "资讯", prices: "行情", prices_history: "K线",
-                     categories: "品类", parks: "地图", policies: "政策", industry: "产业格局" };
+                     categories: "品类", parks: "地图", policies: "政策", industry: "产业格局",
+                     boards: "七大板块" };
   // 每个模块依赖哪些数据文件（决定在哪个页面提示「本次更新失败」）
   var MOD_FILES = {
-    news: ["news"], prices: ["prices", "prices_history"], cats: ["categories"],
+    news: ["news"], prices: ["prices", "prices_history"], cats: ["categories", "boards"],
     parks: ["parks", "industry"], policies: ["policies"]
   };
 
@@ -126,7 +127,7 @@
   }
 
   /* ------------------------------------------------ 数据装载 */
-  var FILES = ["news", "prices", "prices_history", "categories", "parks", "policies", "meta", "sdmap", "industry"];
+  var FILES = ["news", "prices", "prices_history", "categories", "parks", "policies", "meta", "sdmap", "industry", "boards"];
   function loadAll() {
     return Promise.all(FILES.map(function (f) {
       return fetch("data/" + f + ".json?_=" + Date.now())
@@ -135,7 +136,7 @@
     })).then(function (arr) {
       D.news = arr[0]; D.prices = arr[1]; D.hist = arr[2];
       D.cats = arr[3]; D.parks = arr[4]; D.policies = arr[5]; D.meta = arr[6];
-      D.map = arr[7]; D.industry = arr[8];
+      D.map = arr[7]; D.industry = arr[8]; D.boards = arr[9];
       IDX = null;
       DERR = {}; DUPD = {};
       FILES.forEach(function (f, i) {
@@ -1128,6 +1129,18 @@
       '<div class="sbar"><span class="sic">⌕</span>' +
       '<input id="cq" type="search" placeholder="搜品类或产品，如 MDI / 纯碱 / 轮胎" value="' + esc(UI.cq || "") + '"></div></div>';
 
+    /* ---- 七大板块树状图入口 ---- */
+    if (D.boards && D.boards.boards && D.boards.boards.length) {
+      h += '<div class="sec-title">七大板块 <span class="subtle">山东化工产业体系 · 点进去看介绍与标杆企业</span></div>';
+      h += '<div class="card"><div class="boards">';
+      D.boards.boards.forEach(function (b) {
+        h += '<a class="board-node" href="#/board/' + b.key + '">' +
+          '<div class="bn">' + esc(b.name) + '</div>' +
+          '<div class="bc">' + (b.cat_ids || []).length + ' 个品类</div></a>';
+      });
+      h += '</div></div>';
+    }
+
     var q = (UI.cq || "").trim().toLowerCase();
     var total = D.cats.items.length;
 
@@ -1258,6 +1271,54 @@
       h += '</div>';
     }
     h += '<div class="hint">品类知识为人工整理，行业变化快，发现出入请指出。</div>';
+    app.innerHTML = h;
+  }
+
+  /* 七大板块详情：介绍 + 标杆企业 + 该板块品类树 */
+  function viewBoard(key) {
+    var b = null;
+    if (D.boards && D.boards.boards) {
+      D.boards.boards.forEach(function (x) { if (x.key === key) b = x; });
+    }
+    if (!b) { app.innerHTML = '<div class="empty">未找到该板块</div>'; return; }
+    setHeader(b.name + " · 七大板块", { back: true });
+
+    var h = '<div class="dt">' + esc(b.name) + '</div>' +
+      '<div class="dsub">山东化工「七大板块」之一 · ' + (b.cat_ids || []).length + ' 个品类</div>';
+
+    h += '<div class="card"><div class="card-hd">板块介绍</div>' +
+      '<div class="card-bd" style="font-size:14px;line-height:1.72">' + esc(b.intro || "") + '</div></div>';
+
+    if (b.leaders && b.leaders.length) {
+      h += '<div class="sec-title">标杆企业</div><div class="card">';
+      b.leaders.forEach(function (name) {
+        var hit = findEnt(name);
+        if (hit) {
+          h += '<a class="row" href="#/ent/' + hit.key + '/' + hit.idx + '">' +
+            '<div class="main"><div class="rt">' + esc(name) + '</div>' +
+            '<div class="rm">园区收录 · 点看详情</div></div><span class="arrow">›</span></a>';
+        } else {
+          h += '<div class="row"><div class="main"><div class="rt">' + esc(name) + '</div>' +
+            '<div class="rm"><span class="leader off">行业标杆</span></div></div></div>';
+        }
+      });
+      h += '</div>';
+    }
+
+    h += '<div class="sec-title">本板块品类 <span class="subtle">点进去看六问与代表产品</span></div><div class="card">';
+    (b.cat_ids || []).forEach(function (id) {
+      var c = catById(id);
+      if (!c) return;
+      h += '<a class="row" href="#/cat/' + c.id + '">' +
+        '<div class="main"><div class="rt">' + esc(c.name) + '</div>' +
+        '<div class="rm">' + esc(c.one_line || '') + '</div></div><span class="arrow">›</span></a>';
+    });
+    h += '</div>';
+
+    h += '<div class="hint">板块归类为人工整理（73 个品类各归一个主板块），仅供参考；' +
+      '数据来源：' + esc(D.boards && D.boards.source ? D.boards.source : "人工整理") + '</div>';
+
+    h += disclaimer();
     app.innerHTML = h;
   }
 
@@ -1724,6 +1785,7 @@
     else if (seg === "ent") viewEnt(p[1], parseInt(p[2], 10));
     else if (seg === "cats") viewCats();
     else if (seg === "cat") viewCat(p[1]);
+    else if (seg === "board") viewBoard(p[1]);
     else if (seg === "prices") viewPrices();
     else if (seg === "price") viewPrice(decodeURIComponent(p[1] || ""));
     else if (seg === "policies") viewPolicies();

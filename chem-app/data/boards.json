@@ -1,0 +1,57 @@
+{
+  "updated_at": 1792737032,
+  "updated_at_text": "2026-10-23",
+  "source": "PPT《山东化工产业地图》第17页「七大板块」+ 品类数据整理",
+  "note": "山东化工形成「炼化、化肥、无机化工、有机化工、橡胶加工、精细化工、合成材料」七大板块产业体系。本表将 73 个品类归入七大板块（每品类归一个主板块），标杆企业取自各品类头部企业并精选，仅供快速浏览定位，不构成投资依据。",
+  "boards": [
+    {
+      "key": "refining",
+      "name": "炼化",
+      "intro": "石油炼制与基础原料板块，山东地炼产能居全国前列，正从「燃料型」向「减油增化」转型，向下游芳烃、烯烃、高端化学品延伸。",
+      "leaders": ["恒力石化", "中石化", "裕龙石化", "东明石化", "利华益"],
+      "cat_ids": ["refining", "px", "methanol", "sm", "benzene", "propylene", "phenol", "coke", "mtbe", "needlcoke"]
+    },
+    {
+      "key": "fertilizer",
+      "name": "化肥",
+      "intro": "氮磷钾肥与农药板块，山东尿素、复合肥产量全国领先，是保障粮食安全的农化基地，龙头多在内陆农业主产区。",
+      "leaders": ["华鲁恒升", "金正大", "史丹利", "鲁西化工", "云天化"],
+      "cat_ids": ["fertilizer", "phosphate", "compoundfert", "potash", "pesticide", "glyphosate"]
+    },
+    {
+      "key": "inorganic",
+      "name": "无机化工",
+      "intro": "酸碱盐与卤水化工板块，山东纯碱、烧碱、溴素产量全国第一，依托莱州湾地下卤水和海盐资源形成优势。",
+      "leaders": ["山东海化", "滨化集团", "鲁北化工", "中盐化工", "三友化工"],
+      "cat_ids": ["chloralkali", "soda", "cl2", "bromine", "tio2", "acid"]
+    },
+    {
+      "key": "organic",
+      "name": "有机化工",
+      "intro": "基础有机原料与中间体板块，涵盖 PTA、乙二醇、环氧树脂、有机硅等，是连接炼化上游与材料下游的枢纽。",
+      "leaders": ["恒力石化", "荣盛石化", "卫星化学", "新凤鸣", "巨化股份"],
+      "cat_ids": ["pta", "meg", "epoxy", "organosilicon", "plasticizer", "cpl", "po", "dmc_solvent"]
+    },
+    {
+      "key": "rubber",
+      "name": "橡胶加工",
+      "intro": "橡胶与轮胎板块，山东轮胎产量占全国近一半，青岛、东营、威海、烟台形成半岛与鲁北两大轮胎集群。",
+      "leaders": ["玲珑轮胎", "赛轮集团", "三角轮胎", "浦林成山", "黑猫股份"],
+      "cat_ids": ["tire", "carbonblack", "rubberchem", "sr", "poe"]
+    },
+    {
+      "key": "finechem",
+      "name": "精细化工",
+      "intro": "专用化学品板块，涵盖电子化学品、涂料染料、医药、制冷剂、水处理剂及新能源锂电材料，附加值高、品类杂。",
+      "leaders": ["东岳集团", "巨化股份", "三美股份", "晶瑞电材", "华特气体"],
+      "cat_ids": ["electronic", "esg", "wetchem", "photoresist", "membrane", "carbonfiber", "coating", "waterchem", "dye", "pharma", "r32", "r125", "refrigerants", "intermediate", "lithium", "solar", "lipf6"]
+    },
+    {
+      "key": "material",
+      "name": "合成材料",
+      "intro": "高分子聚合物板块，涵盖塑料、化纤、聚氨酯、氟硅材料与特种工程塑料，是山东高端化、新材料转型的主战场。",
+      "leaders": ["万华化学", "东岳集团", "鲁西化工", "金发科技", "华鲁恒升"],
+      "cat_ids": ["polyurethane", "fluorosilicon", "nylon", "engplastic", "polyolefin", "degradable", "pvdf", "peek", "aramid", "pp", "pe", "pvc", "abs", "ps", "eva", "mdi_agg", "mdi_pure", "tdi", "polyether", "polyester", "spandex"]
+    }
+  ]
+}
