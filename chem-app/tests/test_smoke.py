@@ -21,8 +21,8 @@ class SmokeTest(unittest.TestCase):
     def test_boot_and_render(self):
         b = self.ctx.open()
         t = b.app_text()
-        self.assertGreater(len(t), 50, "首页应渲染出文字")
-        self.assertIn("今日一品", t)
+        self.assertGreater(len(t), 50, "首屏（地图）应渲染出文字")
+        self.assertIn("化工园区", t, "地图页应有园区统计")
 
     def test_click_tab(self):
         b = self.ctx.open()

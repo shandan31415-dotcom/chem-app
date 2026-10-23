@@ -261,7 +261,7 @@ class TestOffline(unittest.TestCase):
             b.cdp.eval("location.reload()")
             time.sleep(1.0)
             b.wait_ready(20)
-            b.wait_js("!!document.querySelector('#app .hero')", 25, "断网时应能打开缓存的首屏")
+            b.wait_js("!!document.querySelector('#app .sdmap')", 25, "断网时应能打开缓存的首屏（地图）")
             b.wait_js("document.getElementById('netbar') && !document.getElementById('netbar').hidden",
                       15, "断网必须显示提示条")
             txt = b.cdp.eval("document.getElementById('netbar').innerText")
@@ -279,7 +279,7 @@ class TestOffline(unittest.TestCase):
         b.cdp.eval("location.reload()")
         time.sleep(0.6)
         b.wait_ready(20)
-        b.wait_js("!!document.querySelector('#app .hero')", 20)
+        b.wait_js("!!document.querySelector('#app .sdmap')", 20)
         hidden = b.cdp.eval("document.getElementById('netbar').hidden")
         self.assertTrue(hidden, "联网正常时不应显示离线提示")
 
@@ -293,7 +293,7 @@ class TestOffline(unittest.TestCase):
                     os.remove(p)
             with W.App(root) as a:
                 bb = a.open()
-                a.goto_hash("#/home")
+                a.goto_hash("#/parks")
                 bb.wait_js("document.getElementById('app').innerText.indexOf('未能加载数据')>=0",
                            15, "全无数据时要明说")
         finally:
@@ -311,11 +311,15 @@ class TestMeEntry(unittest.TestCase):
     def tearDownClass(cls):
         cls.ctx.__exit__(None, None, None)
 
-    def test_entry_from_home(self):
+    def test_entry_from_title_double_tap(self):
+        """总览首页删除后，「我的数据」通过双击顶栏标题进入"""
         self.ctx.open()
-        self.ctx.goto_hash("#/home")
-        self.b.wait_js("!!document.querySelector('#app .morelink')", 10, "首页应有我的数据入口")
-        self.b.click_and_wait_hash("#app .morelink", "#/me")
+        self.ctx.goto_hash("#/parks")
+        self.b.cdp.eval("""(function(){
+          var t=document.getElementById('ttl');
+          t.click(); t.click();
+        })()""")
+        self.b.wait_js("location.hash==='#/me'", 10, "双击标题应进入我的数据")
         self.b.wait_js("!!document.getElementById('exp')", 10)
 
     def test_me_explains_cache_is_not_backup(self):

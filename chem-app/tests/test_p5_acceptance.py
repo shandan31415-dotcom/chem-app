@@ -39,21 +39,21 @@ class A01_15(unittest.TestCase):
         self.ctx.goto_hash(h)
         return self.b
 
-    # ---------------- A1 首页 3 秒 ----------------
+    # ---------------- A1 首屏（地图页）3 秒 ----------------
     def test_A1_home_within_3s(self):
         self.ctx.open()          # 先把浏览器和服务叫醒，重开一次才是冷页面计时
         t0 = time.time()
         self.ctx.open()
         dt = (time.time() - t0) * 1000
-        self.assertLess(dt, 3000, "首页 %.0fms，超过 3 秒" % dt)
+        self.assertLess(dt, 3000, "首屏 %.0fms，超过 3 秒" % dt)
         head = self.b.cdp.eval("document.querySelector('header').innerText") or ""
         self.assertIn("更新", head, "顶栏要写出数据是哪天的：%r" % head)
 
-    # ---------------- A2 六个标签 ----------------
-    def test_A2_six_tabs(self):
+    # ---------------- A2 五个标签 ----------------
+    def test_A2_five_tabs(self):
         self.ctx.open()
         n = self.b.count("#tabbar .tab, .tabbar .tab, nav .tab")
-        self.assertGreaterEqual(n, 6, "底部标签数 %d" % n)
+        self.assertEqual(5, n, "底部标签数应为 5，实际 %d" % n)
         seen = []
         for i in range(n):
             self.b.click(".tab", i)
@@ -65,49 +65,28 @@ class A01_15(unittest.TestCase):
             seen.append(h)
         self.assertEqual(n, len(set(seen)), "有标签跳到了同一个页面：%r" % (seen,))
 
-    # ---------------- A3 首页四卡可点 ----------------
-    def test_A3_four_home_cards(self):
+    # ---------------- A3 地图页可点进详情 ----------------
+    def test_A3_map_links(self):
         self.ctx.open()
-        self.go("#/home")
-        txt = self.b.app_text()
-        for name in ["今日一品", "今日一策", "今日一动", "价格异动"]:
-            self.assertIn(name, txt, "首页缺「%s」卡片" % name)
-        self.assertGreater(self.b.count("#app .hero"), 0)
-        self.assertGreater(self.b.count('#app a.jrow[href^="#/policy/"]'), 0)
-        self.assertGreater(self.b.count('#app a.mover[href^="#/price/"]'), 0)
+        self.go("#/parks")
+        # 地图要有 SVG 和 KPI 统计
+        self.assertGreater(self.b.count("#app .sdmap"), 0, "地图页应有山东地图")
+        self.assertGreater(self.b.count("#app .kpis .kp"), 0, "地图页应有园区/企业统计")
+        # 点地图页的地市列表应进地市详情
+        self.b.click('#app a[href^="#/city/"]', 0)
+        self.assertTrue(self.b.hash().startswith("#/city/"), "点地市应进地市详情")
+        self.b.wait_js("!!document.querySelector('#app .dt')", 10)
 
-        # 今日一品 → 品类页
-        self.b.click("#app .hero")
-        self.assertTrue(self.b.hash().startswith("#/cat/"), "今日一品应进品类页")
-        self.go("#/home")
-        # 今日一策 → 政策页
-        self.b.click('#app a.jrow[href^="#/policy/"]', 0)
-        self.assertTrue(self.b.hash().startswith("#/policy/"), "今日一策应进政策页")
-        self.go("#/home")
-        # 价格异动 → 行情页
-        self.b.click("#app a.mover", 0)
-        self.assertTrue(self.b.hash().startswith("#/price/"), "价格异动应进行情页")
-        self.go("#/home")
-        # 今日一动：匹配到企业/园区时可点；没匹配到必须明说，不能给死链
-        n_link = self.b.count('#app a.jrow[href^="#/ent/"]') + \
-            self.b.count('#app a.jrow[href^="#/park/"]')
-        if n_link:
-            self.b.click('#app a.jrow[href^="#/ent/"], #app a.jrow[href^="#/park/"]', 0)
-            self.assertTrue(self.b.hash().startswith(("#/ent/", "#/park/")),
-                            "今日一动应进企业或园区页")
-        else:
-            self.assertIn("未匹配", self.b.app_text(), "没匹配到要写清楚，不能是死链")
-
-    # ---------------- A4 返回回首页 ----------------
-    def test_A4_back_to_home(self):
+    # ---------------- A4 返回回地图 ----------------
+    def test_A4_back_to_map(self):
         self.ctx.open()
-        self.go("#/home")
-        self.b.click("#app .hero")
-        self.assertTrue(self.b.hash().startswith("#/cat/"))
+        self.go("#/parks")
+        self.b.click('#app a[href^="#/city/"]', 0)
+        self.assertTrue(self.b.hash().startswith("#/city/"))
         self.b.cdp.eval("history.length")   # 确保有历史
         self.b.click("#back")
         time.sleep(0.3)
-        self.assertIn(self.b.hash(), ["#/home", ""], "从详情返回应回到首页，实际 %s" % self.b.hash())
+        self.assertIn(self.b.hash(), ["#/parks", ""], "从详情返回应回到地图，实际 %s" % self.b.hash())
 
     # ---------------- A5 三板块都有内容 ----------------
     def test_A5_three_blocks(self):
@@ -448,7 +427,7 @@ class A16_Offline(unittest.TestCase):
             b.cdp.eval("location.reload()")
             time.sleep(1.0)
             b.wait_ready(20)
-            b.wait_js("!!document.querySelector('#app .hero')", 25, "断网仍要能看到上次内容")
+            b.wait_js("!!document.querySelector('#app .sdmap')", 25, "断网仍要能看到上次内容（地图）")
             b.wait_js("document.getElementById('netbar')&&!document.getElementById('netbar').hidden",
                       15, "必须明确显示离线")
             txt = b.cdp.eval("document.getElementById('netbar').innerText")
@@ -480,9 +459,9 @@ class A19_BrokenFile(unittest.TestCase):
 
     def test_A19_other_modules_still_work(self):
         self.ctx.open()
-        self.ctx.goto_hash("#/home")
-        self.b.wait_js("!!document.querySelector('#app .hero')", 15,
-                       "行情坏了首页仍应取到品类")
+        self.ctx.goto_hash("#/parks")
+        self.b.wait_js("!!document.querySelector('#app .sdmap')", 15,
+                       "行情坏了地图仍应正常")
         self.ctx.goto_hash("#/cats")
         self.b.wait_js("document.querySelectorAll('#app a[href^=\"#/cat/\"]').length>0", 10,
                        "品类模块不受行情影响")

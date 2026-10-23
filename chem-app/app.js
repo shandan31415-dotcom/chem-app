@@ -150,7 +150,14 @@
   }
 
   /* ------------------------------------------------ 顶栏提示（更新失败 / 离线） */
-  function curSeg() { return (location.hash.replace(/^#\/?/, "").split("/")[0]) || "home"; }
+  function curSeg() { return (location.hash.replace(/^#\/?/, "").split("/")[0]) || "parks"; }
+
+  /* ------------------------------------------------ 免责声明（所有模块底部统一挂一条） */
+  var DISCLAIMER = "本应用为化工行业信息导航工具，内容仅供参考，不构成任何投资、交易或经营决策依据；" +
+    "数据来源为公开渠道并可能存在滞后或疏漏，请以官方发布为准。";
+  function disclaimer() {
+    return '<div class="disclaimer">' + DISCLAIMER + '</div>';
+  }
 
   function netUI() {
     var el = $("netbar");
@@ -261,7 +268,7 @@
     }
     var up = (D.meta && D.meta.updated_at_text) || localStorage.getItem("chemapp.updated") || "";
     meta.textContent = up ? "数据更新 " + up : "";
-    var seg = (location.hash.replace(/^#\/?/, "").split("/")[0]) || "home";
+    var seg = (location.hash.replace(/^#\/?/, "").split("/")[0]) || "parks";
     Array.prototype.forEach.call(nav.children, function (b) {
       b.className = "tab" + (b.dataset.r === seg ? " on" : "");
     });
@@ -542,6 +549,7 @@
       });
       h += '</div>';
     }
+    h += disclaimer();
     app.innerHTML = h;
 
     Array.prototype.forEach.call(app.querySelectorAll(".chip"), function (c) {
@@ -750,6 +758,8 @@
     h += '<div class="hint">点击地图上任意地市，看该市的化工产业定位、园区与代表企业；' +
       '也可以在顶部搜企业名、园区名或产品（如「MDI」「轮胎」「纯碱」）。' +
       '颜色深浅＝该市收录的高端化工企业数量。整理日期：' + esc(D.parks.updated_at_text || "") + '</div>';
+
+    h += disclaimer();
 
     app.innerHTML = h;
 
@@ -1075,6 +1085,8 @@
         esc(D.cats.updated_at_text || "") + '</div>';
     }
 
+    h += disclaimer();
+
     app.innerHTML = h;
 
     var qi = $("cq");
@@ -1216,6 +1228,7 @@
     });
     if (!any) h += '<div class="empty">没有匹配的品种</div>';
     h += '<div class="hint">价格为期货主连收盘/最新价，红涨绿跌。期货价不等于现货成交价。</div>';
+    h += disclaimer();
     app.innerHTML = h;
     var qi = $("q");
     if (qi) qi.oninput = function () {
@@ -1432,6 +1445,7 @@
       h += '</div>';
     }
     h += '<div class="hint">第一版政策源：山东省工信厅 + 国家发改委 + 生态环境部。国家级政策源仍在补充。</div>';
+    h += disclaimer();
     app.innerHTML = h;
 
     var qi = $("q");
@@ -1620,10 +1634,9 @@
       return;
     }
     var p = location.hash.replace(/^#\/?/, "").split("/").filter(Boolean);
-    var seg = p[0] || "home";
-    if (seg === "home") viewHome();
+    var seg = p[0] || "parks";
+    if (seg === "parks") { if (p[1]) UI.mq = decodeURIComponent(p[1]); viewParks(); }
     else if (seg === "news") viewNews();
-    else if (seg === "parks") { if (p[1]) UI.mq = decodeURIComponent(p[1]); viewParks(); }
     else if (seg === "city") viewCity(p[1]);
     else if (seg === "park") viewPark(p[1]);
     else if (seg === "ent") viewEnt(p[1], parseInt(p[2], 10));
@@ -1634,7 +1647,7 @@
     else if (seg === "policies") viewPolicies();
     else if (seg === "policy") viewPolicy(p[1]);
     else if (seg === "me") viewMe();
-    else viewHome();
+    else viewParks();
     window.scrollTo(0, 0);
   }
 
@@ -1648,7 +1661,7 @@
 
   backBtn.onclick = function () {
     if (history.length > 1) history.back();
-    else location.hash = "#/home";
+    else location.hash = "#/parks";
   };
 
   refreshBtn.onclick = function () {

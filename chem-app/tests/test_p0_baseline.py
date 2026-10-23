@@ -18,8 +18,8 @@ import qa  # noqa: E402
 from webrunner import App  # noqa: E402
 
 TABS = [
-    ("home", "总览"), ("news", "资讯"), ("parks", "地图"),
-    ("cats", "品类"), ("prices", "行情"), ("policies", "政策"),
+    ("parks", "地图"), ("cats", "品类"), ("news", "资讯"),
+    ("prices", "行情"), ("policies", "政策"),
 ]
 
 
@@ -106,7 +106,7 @@ class TestAppShell(unittest.TestCase):
             "Array.from(document.querySelectorAll('.tab')).map(function(t){"
             "return Math.round(t.getBoundingClientRect().top)}).filter(function(v,i,a){"
             "return a.indexOf(v)===i}).length")
-        self.assertEqual(1, rows, "6 个标签必须在同一行（不折行）")
+        self.assertEqual(1, rows, "5 个标签必须在同一行（不折行）")
 
 
 if __name__ == "__main__":
