@@ -171,7 +171,10 @@ class TestWorkflows(unittest.TestCase):
         trig = self.trigger(d)
         self.assertIn("workflow_dispatch", trig, "要能手动触发一次验证")
         cron = [c["cron"] for c in trig["schedule"]]
-        self.assertIn("0 22 * * *", cron, "UTC 22:00 对应北京时间 6:00")
+        # 问题7：缩短更新间隔，每天 3 次覆盖期货交易关键时点
+        # UTC 01:30=北京09:30（早盘） / UTC 07:30=北京15:30（日盘收盘） / UTC 15:00=北京23:00（夜盘收盘）
+        for c in ["30 1 * * *", "30 7 * * *", "0 15 * * *"]:
+            self.assertIn(c, cron, "缺少定时 %s（每天应抓取 3 次）" % c)
 
     def test_daily_commits_data(self):
         d = self.load(self.daily_p)

@@ -1470,7 +1470,10 @@
       h += '</div>';
     });
     if (!any) h += '<div class="empty">没有匹配的品种</div>';
-    h += '<div class="hint">价格为期货主连收盘/最新价，红涨绿跌。期货价不等于现货成交价。</div>';
+    var up = (D.prices.updated_at_text || "").trim();
+    h += '<div class="hint">价格为期货主连收盘/最新价，红涨绿跌。期货价不等于现货成交价。' +
+      (up ? ' 本次行情更新于 ' + esc(up) + '。' : '') +
+      ' 每天盘中、日盘收盘、夜盘收盘各抓取一次。</div>';
     h += disclaimer();
     app.innerHTML = h;
     var qi = $("q");
