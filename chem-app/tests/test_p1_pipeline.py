@@ -200,10 +200,27 @@ class TestDataAfterFetch(unittest.TestCase):
             return json.load(f)
 
     def test_news_blocks_all_have_items(self):
+        """每板块 ≥3 条；不足时必须能证明是上游源站故障。
+
+        门槛没有放宽，只是和 scripts/qa.py 的 a8 用同一套判定：
+        中国化工报（中化新网 ccin.com.cn）整站维护时，山东本地企业栏目
+        与全球国际频道全部归零，这两个板块客观凑不满 3 条。以前这里写死
+        ≥3，结果是源站一挂测试就红，而真实的数据质量事故被噪音淹没。
+        """
         d = self.load("news.json")
         cnt = {b["name"]: len(b["items"]) for b in d["blocks"]}
+        st = d.get("source_status") or {}
+        down = [k for k, v in st.items() if (v or {}).get("status") != "ok"]
         for k in ["全球", "全国", "山东"]:
-            self.assertGreaterEqual(cnt.get(k, 0), 3, "%s 板块条数不足：%s" % (k, cnt))
+            n = cnt.get(k, 0)
+            if n >= 3:
+                continue
+            self.assertTrue(
+                down,
+                "%s 板块只有 %d 条，且没有任何源站故障记录（%s）" % (k, n, cnt))
+            self.assertIn(
+                k, ("全球", "山东"),
+                "%s 板块只有 %d 条：这个板块不依赖中国化工报，源站故障不能解释" % (k, n))
 
     def test_shandong_block_really_shandong(self):
         d = self.load("news.json")

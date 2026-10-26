@@ -28,6 +28,7 @@ import shutil
 import time
 import urllib.request
 import urllib.error
+from urllib.parse import urljoin
 from email.utils import parsedate_to_datetime
 
 BASE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -207,6 +208,15 @@ AD_WORDS = ["年度报告目录", "市场年度报告", "预售", "数据包", "
             "订阅", "征订", "广告", "月报", "推荐报告", "评估报告", "年度报告",
             "产业链价格自我评估"]
 
+# 垂类源里的非化工品种。卓创、隆众的首页是大宗商品综合页，
+# 化工行情稿会和鸡蛋、生猪、螺纹钢混在一起，整栏收时必须把这些挡掉，
+# 否则「每日三分钟」里会出现「江西九江褐壳鸡蛋价格上涨」。
+OFF_TOPIC = ["鸡蛋", "褐壳", "白羽肉", "生猪", "仔猪", "能繁母猪", "玉米", "小麦", "稻谷",
+             "大豆", "豆粕", "菜粕", "菜籽", "棉花", "白糖", "食糖", "苹果", "红枣",
+             "花生", "马铃薯", "生姜", "大蒜", "辣椒", "生猪价格",
+             "钢铁", "粗钢", "螺纹钢", "铁矿石", "焦炭", "焦煤", "废钢", "不锈钢",
+             "有色金属", "黄金", "白银", "沪铜", "沪铝", "沪锌", "玻璃现货"]
+
 # 资讯只留这么多天以内的。企业栏目首页常挂着两三年前的旧稿，
 # 混进「每日三分钟」里就成了误导（App 里企业动态超过 90 天也会灰掉）。
 NEWS_MAX_AGE_DAYS = 45
@@ -228,13 +238,30 @@ GROUP_ORDER = ["原油与油品", "聚烯烃与氯碱", "聚酯产业链", "煤�
 FIELDS = "f2,f3,f4,f12,f13,f14"
 
 
+def get_quote(url, referer="https://quote.eastmoney.com/", timeout=25):
+    """行情接口取数，https 握手失败时回落到 http。
+
+    东方财富的 push2 / push2his 在部分网络环境下 https 会直接断连
+    （Remote end closed connection / Connection reset），但同一个接口走
+    http 完全正常。写死 https 会让行情整个模块抓不到、被迫保留旧价格，
+    用户看到的就是「价格不更新」。本地网络与 CI 出口策略不同，必须两种都试。
+    """
+    try:
+        return http_get(url, referer=referer, timeout=timeout, retries=0)
+    except Exception:  # noqa: BLE001
+        if url.startswith("https://") and "eastmoney.com" in url:
+            return http_get("http://" + url[len("https://"):],
+                            referer=referer, timeout=timeout, retries=1)
+        raise
+
+
 def fetch_prices():
     items = []
     for mk, ex in MARKETS.items():
         for pn in range(1, 8):
             u = ("https://push2.eastmoney.com/api/qt/clist/get?pn=%d&pz=100&po=0&np=1"
                  "&fltt=2&invt=2&fid=f12&fs=%s&fields=%s" % (pn, mk, FIELDS))
-            d = json.loads(http_get(u, referer="https://quote.eastmoney.com/").decode("utf-8", "ignore"))
+            d = json.loads(get_quote(u).decode("utf-8", "ignore"))
             arr = (d.get("data") or {}).get("diff") or []
             if not arr:
                 break
@@ -278,7 +305,7 @@ def fetch_kline(secid, lmt=250):
     u = ("https://push2his.eastmoney.com/api/qt/stock/kline/get?secid=%s&klt=101&fqt=1"
          "&beg=0&end=20500101&lmt=%d&fields1=f1,f2,f3,f4,f5,f6"
          "&fields2=f51,f52,f53,f54,f55,f56,f57" % (secid, lmt))
-    d = json.loads(http_get(u, referer="https://quote.eastmoney.com/").decode("utf-8", "ignore"))
+    d = json.loads(get_quote(u).decode("utf-8", "ignore"))
     ks = (d.get("data") or {}).get("klines") or []
     out = []
     for k in ks:
@@ -313,6 +340,56 @@ KW_HIGH = ["新材料", "高端", "特种", "精细化工", "国产替代", "专
 KW_CHEM = ["化工", "石化", "化学", "炼化", "乙烯", "丙烯", "聚合物", "合成", "催化", "装置",
            "树脂"]
 
+# 大宗基础品种：品类库（categories.json）收的是高端化工，苯酚、粗苯、醋酸乙酯
+# 这类基础品种不在里面，但行情稿天天出现，必须单独补一份。
+BULK_CHEM = ["苯酚", "丙酮", "醋酸", "醋酸乙酯", "醋酸乙烯", "丁二烯", "粗苯", "甲苯", "二甲苯",
+             "苯胺", "乙二醇", "丙二醇", "甲醇", "乙醇", "丁醇", "辛醇", "异辛醇", "丙烯腈",
+             "丁腈", "顺丁橡胶", "丁苯橡胶", "天然橡胶", "涤纶", "锦纶", "粘胶", "短纤",
+             "长丝", "切片", "聚酯", "烧碱", "纯碱", "液碱", "片碱", "硫酸", "硝酸", "盐酸",
+             "磷酸", "尿素", "合成氨", "磷肥", "钾肥", "复合肥", "草甘膦", "钛白粉", "炭黑",
+             "白炭黑", "硅橡胶", "有机硅", "多晶硅", "磷酸铁锂", "碳酸锂", "电解液", "隔膜",
+             "负极", "正极", "石油焦", "针状焦", "沥青", "燃料油", "石脑油", "液化气",
+             "天然气", "原油", "成品油", "汽油", "柴油", "煤油", "烷基化", "重整", "加氢",
+             "催化裂化", "氯碱", "电石", "三聚氰胺", "甲醛", "丙烯酸", "丁酮", "乙腈",
+             "二氯甲烷", "氯化石蜡", "氯乙烯", "四氢呋喃", "制冷剂", "氟化工", "磷化工",
+             "煤化工", "盐化工", "环氧丙烷", "环氧氯丙烷", "双酚A", "苯酐", "顺酐", "增塑剂",
+             "涂料", "油墨", "胶粘剂", "塑料", "橡胶", "化纤", "化肥", "农药", "颜料",
+             "裂解", "芳烃", "烯烃", "烷烃", "氯碱化工", "精细化工",
+             # 「能化」是能源化工简称，隆众的日评栏目就叫「隆众能化早读」，
+             # 讲的是国际油价与中东局势对化工的成本传导，属于全球板块主力稿
+             "能化", "油价", "炼油", "OPEC", "欧佩克", "石脑油", "丙烷", "丁烷"]
+
+_KW_WIDE_CACHE = None
+
+
+def chem_keywords_wide():
+    """化工主题泛词库：品类库的品类名 + 产品名 + 大宗基础品种。
+
+    为什么要专门做一份：垂类媒体验证「这条是不是化工」时，KW_CHEM 只有
+    「化工/石化/化学」等 10 个词，而实际标题写的是品种名（苯酚、丁二烯、
+    粗苯、EVA），命中不了。反过来如果只判「不是农产品就收」，又会把隆众
+    转发的房地产、商品住宅价格统计稿放进来。所以两头都要卡：既排除非化工
+    品种（OFF_TOPIC），又要求命中化工主题（本词库）。
+    """
+    global _KW_WIDE_CACHE
+    if _KW_WIDE_CACHE is not None:
+        return _KW_WIDE_CACHE
+    words = set(BULK_CHEM) | set(KW_CHEM)
+    p = os.path.join(DATA, "categories.json")
+    try:
+        with open(p, encoding="utf-8") as f:
+            cats = json.load(f).get("items") or []
+    except Exception:  # noqa: BLE001
+        cats = []
+    for c in cats:
+        for k in [c.get("name")] + list(c.get("products") or []):
+            k = str(k or "").strip()
+            # 只收含中文且长度≥2 的：PC / PS / PP 这类英文缩写会命中大量无关词
+            if len(k) >= 2 and re.search(r"[\u4e00-\u9fff]", k):
+                words.add(k)
+    _KW_WIDE_CACHE = words
+    return words
+
 # 山东判定：16 市名 + 省名（高置信）
 CITY_NAMES = ["山东", "济南", "青岛", "淄博", "枣庄", "东营", "烟台", "潍坊", "济宁", "泰安",
               "威海", "日照", "临沂", "德州", "聊城", "滨州", "菏泽"]
@@ -324,6 +401,22 @@ SD_SIGNALS = ["山东省", "省工信厅", "省发改委", "齐鲁", "鲁西", "
 SD_CO_SIGNALS = ["裕龙", "万华", "齐鲁石化", "东明石化", "利华益", "华鲁恒升", "鲁西化工",
                  "京博", "海科", "富海", "齐翔腾达", "滨化", "东岳", "金诚", "汇丰石化",
                  "亚星化学", "海化集团", "信发", "新龙", "恒通化工", "清源集团"]
+# 区域品牌：这几个词本身就是化工产业带的代称（齐鲁石化、鲁西化工、鲁北集团、
+# 黄河三角洲盐化工），标题里出现即可认定主题在化工范围内。
+# 注意不能把 SD_SIGNALS 整份拿来用：里面「山东省」「省工信厅」「省发改委」
+# 是纯行政名，几乎所有省政务稿都带，会把「无线电监测演练」「省委常委会会议」
+# 一起判成化工稿。
+SD_BRAND_SIGNALS = ["齐鲁", "鲁西", "鲁北", "黄三角"]
+
+# 政务源（省工信厅）专用严格词表。
+# 政务稿天天出现「产业链」「创新」「融合成果」这类词，用宽松词表一定误伤：
+# 「产业创新融合成果」里的「融合成」会被 KW_CHEM 的「合成」子串命中，
+# 「齐鲁七星」会被区域品牌信号「齐鲁」判成化工。政务源只认明确的行业词。
+KW_CHEM_STRICT = ["化工", "石化", "化学", "炼化", "氯碱", "橡胶", "塑料", "化肥", "农药",
+                  "涂料", "颜料", "新材料", "危险化学品", "危化品", "烯烃", "芳烃",
+                  "乙烯", "丙烯", "聚丙烯", "聚乙烯", "聚氯乙烯", "纯碱", "烧碱",
+                  "轮胎", "炭黑", "钛白粉", "树脂", "化纤", "焦化", "煤化工", "盐化工",
+                  "石油", "天然气", "润滑油", "沥青"]
 # 全球判定：境外主体 / 境外市场相关
 GLOBAL_WORDS = ["全球", "国际", "美国", "欧洲", "欧盟", "欧元区", "日本", "韩国", "中东",
                 "俄罗斯", "东南亚", "海外", "印度", "德国", "沙特", "进口", "出口",
@@ -446,6 +539,60 @@ def parse_chemnews(s):
             ts = None
         out.append({"title": title, "url": "https://www.chemnews.com.cn" + url,
                     "summary": "", "ts": int(ts) if ts else None, "source": "中国化工信息周刊"})
+    return out
+
+
+def parse_sd_gxt(s):
+    """山东省工信厅：工作动态列表页 /art/2026/4/3/art_15165_10370396.html
+
+    用途：补「山东」板块。山东本地的化工资讯原本主要来自中国化工报的
+    企业栏目，那批源全挂在 ccin.com.cn 这个域名下，源站维护时山东板块
+    会直接归零。省工信厅的政务动态是官方、稳定、不依赖第三方的兜底源。
+
+    列表页里的链接有绝对和相对两种写法（首页用 /art/...，栏目页用
+    http://gxt.shandong.gov.cn/art/...），只认相对写法会解析出 0 条。
+
+    首页混有大量政务与全国转载稿，这里不整栏收，交给 enrich 的
+    _gov 严格词表过滤 + 山东归属判定处理。
+    """
+    out, seen = [], set()
+    pat = (r'href="((?:https?://gxt\.shandong\.gov\.cn)?/art/\d{4}/\d{1,2}/\d{1,2}'
+           r'/art_\d+_\d+\.html)"[^>]*>\s*([^<]{8,90}?)\s*</a>')
+    for m in re.finditer(pat, s):
+        url, title = m.group(1), clean(m.group(2))
+        if not title or len(title) < 8:
+            continue
+        full = url if url.startswith("http") else "http://gxt.shandong.gov.cn" + url
+        if full in seen:
+            continue
+        seen.add(full)
+        out.append({"title": title, "url": full, "summary": "",
+                    "ts": date_from_url(full), "source": "山东省工信厅"})
+    return out
+
+
+def parse_sci99(s):
+    """卓创资讯首页：/info/3_1000001_45848408.html，日期写在标题括号里。
+
+    首页是大宗商品综合页，化工（苯酚、醋酸乙酯、丁二烯）与鸡蛋、钢铁混排，
+    非化工品种交给 enrich 里的 OFF_TOPIC 挡。
+    """
+    out = []
+    pat = r'href="(/info/\d+_\d+_\d+\.html)"[^>]*>\s*([^<]{6,80}?)\s*</a>'
+    for m in re.finditer(pat, s):
+        url, title = m.group(1), clean(m.group(2))
+        if not title or len(title) < 6:
+            continue
+        ts = None
+        dm = re.search(r"[（(](20\d{2})(\d{2})(\d{2})", title)
+        if dm:
+            try:
+                ts = int(time.mktime(time.strptime(
+                    "%s-%s-%s" % (dm.group(1), dm.group(2), dm.group(3)), "%Y-%m-%d")))
+            except Exception:  # noqa: BLE001
+                ts = None
+        out.append({"title": title, "url": "https://www.sci99.com" + url,
+                    "summary": "", "ts": ts, "source": "卓创资讯"})
     return out
 
 
@@ -594,11 +741,26 @@ def enrich(items):
         known = (ent_hit(it["title"], SD_KEYS)
                  or ent_hit(it["title"], SD_CO_SIGNALS)
                  or any(k in it["title"] for k in FOREIGN_FIRMS)
-                 or any(k in it["title"] for k in SD_SIGNALS))
+                 or any(k in it["title"] for k in SD_BRAND_SIGNALS))
         if any(w in it["title"] for w in AD_WORDS):
             continue
-        ok = (is_high_end(text, known)
-              or (it.get("_intl") and any(k in text for k in KW_CHEM)))
+        # 三个放行口子，按可信度从高到低：
+        #   1) is_high_end：标题自己做完了「化工 + 高端」双重确认
+        #   2) _intl：境外频道整栏本来就是化工口径，标题不必再出现「化工」
+        #   3) _vertical：化工垂类媒体（中国化工报/化工信息周刊/隆众/卓创），
+        #      整个站只有化工内容，标题常只写品种名（苯酚、醋酸乙酯、丁二烯），
+        #      再用「化工+高端」双关键词卡会把专业稿全部筛掉——这正是
+        #      「资讯总是不新、只剩几条」的真实原因。改为只挡非化工品种。
+        # 政务源（省工信厅）单独走严格词表：它的稿子绝大多数是政务活动，
+        # 用上面的宽松口子会放进一堆「纺织新品」「无线电演练」。
+        if it.get("_gov"):
+            ok = any(k in text for k in KW_CHEM_STRICT)
+        else:
+            ok = (is_high_end(text, known)
+                  or (it.get("_intl") and any(k in text for k in KW_CHEM))
+                  or (it.get("_vertical")
+                      and not any(w in it["title"] for w in OFF_TOPIC)
+                      and any(k in text for k in chem_keywords_wide())))
         if not ok:
             continue
         key = norm_title(it["title"])[:30]
@@ -621,43 +783,82 @@ def enrich(items):
     return res
 
 
+# 政务源：稿子绝大多数是政务活动，只认 KW_CHEM_STRICT 的明确行业词
+GOV_SOURCES = {"山东省工信厅"}
+
+# 本次抓取各源的健康度：{源名: {"count": 条数, "status": ok/maintenance/error}}
+# 为什么要落盘：qa 的质量门禁需要区分「数据不合格」和「上游源站挂了」。
+# 中国化工报整站维护时，山东与全球板块必然掉到 3 条以下，如果门禁一律刷红，
+# 报警就会天天失灵（每个真实故障都被淹没在噪音里）。
+SOURCE_STATUS = {}
+
+
 def fetch_news():
     """返回全部原始资讯（未过滤）"""
     raw = []
+    SOURCE_STATUS.clear()
     jobs = [
-        ("中国化工报", "http://www.ccin.com.cn/", parse_ccin_list, False),
-        ("中国化工信息周刊", "https://www.chemnews.com.cn/", parse_chemnews, False),
-        ("隆众资讯", "https://www.oilchem.net/", parse_oilchem, False),
+        # (名称, 列表页, 解析函数, 是否境外口径, 是否化工垂类媒体)
+        ("中国化工报", "http://www.ccin.com.cn/", parse_ccin_list, False, True),
+        ("中国化工信息周刊", "https://www.chemnews.com.cn/", parse_chemnews, False, True),
+        ("隆众资讯", "https://www.oilchem.net/", parse_oilchem, False, True),
+        ("卓创资讯", "https://www.sci99.com/", parse_sci99, False, True),
+        # 山东板块兜底：省工信厅工作动态（近一个月约 90 条），
+        # 不依赖第三方源站，源站维护时也不会跟着归零
+        ("山东省工信厅", "http://gxt.shandong.gov.cn/col/col15165/index.html",
+         parse_sd_gxt, False, False),
         # 国际化工频道：本身就是境外口径，整栏收，用来补「全球」板块（P1-5）
-        ("中国化工报·国际化工", "http://www.ccin.com.cn/c/int", parse_ccin_list, True),
+        ("中国化工报·国际化工", "http://www.ccin.com.cn/c/int", parse_ccin_list, True, True),
         # 期货品种评论：品种详情页「关联新闻」的主要依据（不进资讯板块，除非本身是化工主题）
-        ("东方财富·期货", "https://futures.eastmoney.com/", parse_em_futures, False),
+        ("东方财富·期货", "https://futures.eastmoney.com/", parse_em_futures, False, False),
     ]
-    for name, url, fn, intl in jobs:
+    for name, url, fn, intl, vertical in jobs:
         try:
-            got = fn(http_get(url).decode("utf-8", "ignore"))
+            body = http_get(url).decode("utf-8", "ignore")
+            got = fn(body)
+            # 源站维护页也会返 200，解析出来是 0 条。不区分清楚的话，
+            # 只会在日志里看到「0 条」，很容易被当成抓取规则失效，白查一轮。
+            if not got and any(k in body[:5000] for k in ["系统维护", "升级中", "暂停服务"]):
+                SOURCE_STATUS[name] = {"count": 0, "status": "maintenance"}
+                print("  [!] %s 站点正在维护，本次 0 条（源站问题，不是抓取故障）" % name)
+                continue
             if got and not any(g.get("ts") for g in got):
                 got = fill_ccin_dates(got, 10)
-            if intl:
-                for g in got:
+            for g in got:
+                if intl:
                     g["_intl"] = True
                     g["source"] = "中国化工报·国际化工"
+                if vertical:
+                    g["_vertical"] = True
+                if name in GOV_SOURCES:
+                    g["_gov"] = True
             raw += got
+            SOURCE_STATUS[name] = {"count": len(got), "status": "ok"}
             print("     %s: %d 条" % (name, len(got)))
         except Exception as e:  # noqa: BLE001
+            SOURCE_STATUS[name] = {"count": 0, "status": "error"}
             print("  [!] %s 失败: %s" % (name, str(e)[:60]))
 
     # 山东本地口径来源（P1-4）：企业化工厂栏目，整栏收但每栏限量、去掉非行业稿
     for cname, url in SD_CHANNELS:
+        key = "山东·%s" % cname
         try:
-            got = parse_ccin_list(http_get(url).decode("utf-8", "ignore"))
+            body = http_get(url).decode("utf-8", "ignore")
+            got = parse_ccin_list(body)
             got = [g for g in got if not any(k in g["title"] for k in SD_CHANNEL_DROP)][:6]
             for g in got:
                 g["_sd"] = True
                 g["source"] = "中国化工报·%s" % cname
             raw += got
+            # 这批栏目全部挂在 ccin.com.cn 下，源站维护时它们会一起归零，
+            # 山东板块的「本地企业动态」也就断了。健康度要单独记，qa 才能分辨。
+            st = "ok"
+            if not got and any(k in body[:5000] for k in ["系统维护", "升级中", "暂停服务"]):
+                st = "maintenance"
+            SOURCE_STATUS[key] = {"count": len(got), "status": st}
             print("     山东·%s: %d 条" % (cname, len(got)))
         except Exception as e:  # noqa: BLE001
+            SOURCE_STATUS[key] = {"count": 0, "status": "error"}
             print("  [!] 山东栏目 %s 失败: %s" % (cname, str(e)[:40]))
 
     # 补充：中新网 RSS（国际频道用于全球板块兜底）
@@ -683,8 +884,10 @@ def fetch_news():
                             "summary": clean(it.findtext("description"), 100),
                             "ts": ts, "source": "中新网", "_intl": cid == "world"})
                 n += 1
+            SOURCE_STATUS["中新网-%s" % cname] = {"count": n, "status": "ok"}
             print("     中新网-%s: %d 条" % (cname, n))
         except Exception as e:  # noqa: BLE001
+            SOURCE_STATUS["中新网-%s" % cname] = {"count": 0, "status": "error"}
             print("  [!] 中新网 %s 失败: %s" % (cname, str(e)[:40]))
 
     raw, stale = drop_stale(raw)
@@ -796,10 +999,43 @@ def policy_impact(title):
 
 
 def resolve_policy_url(h, src):
-    if h.startswith("http"):
-        return h
-    root = src["url"].split("/col/")[0].rstrip("/")
-    return root + "/" + h.lstrip("./")
+    """把列表页里的相对链接还原成能直接打开的绝对地址。
+
+    必须用 urljoin 做标准解析，不能手工 lstrip("./") 再拼根：
+    政府站列表页的 href 常见 `./zyygwj/202610/t20261022_1184320.shtml`
+    和 `../../xxgk2018/xxgk/xxgk01/202608/t...html` 两种写法，后者带
+    层级上跳。lstrip("./") 是按字符集剥离，会把 "../../" 整个吃掉，
+    拼出来变成 /zcwj/xxgk2018/... —— 少跳一级，页面自然打不开，
+    用户在 App 里点「打开原文」就看到「地址出错或不存在」。
+    """
+    return urljoin(src["url"], h)
+
+
+# 政府站死链特征：这类页面通常仍返回 HTTP 200，只看状态码会被骗过去
+POLICY_DEAD_MARKERS = ["页面不存在", "文件不存在", "网页不存在", "页面已删除", "已被删除",
+                       "404 Not Found", "404错误", "系统维护", "无法找到", "您访问的页面"]
+
+
+def policy_url_alive(url, timeout=12):
+    """回源确认政策原文确实能打开，返回 (是否存活, 页面标题)。
+
+    抓取端必须自己验一遍：列表页链接抽错了，前端没法兜底，
+    只能把死链直接挡在数据层，不写进 JSON。
+    """
+    try:
+        raw = http_get(url, timeout=timeout, retries=0)
+    except Exception:  # noqa: BLE001
+        return False, ""
+    if not raw or len(raw) < 1200:
+        return False, ""
+    s = raw.decode("utf-8", "ignore")
+    m = re.search(r"<title>(.*?)</title>", s, re.S)
+    title = clean(m.group(1)) if m else ""
+    if any(k in title for k in POLICY_DEAD_MARKERS):
+        return False, title
+    if any(k in s[:3000] for k in POLICY_DEAD_MARKERS):
+        return False, title
+    return True, title
 
 
 def fetch_policies():
@@ -836,6 +1072,21 @@ def fetch_policies():
     still = [x for x in out if not x.get("ts")]
     if still:
         print("     [!] 仍有 %d 条取不到日期，页面会显示「—」" % len(still))
+
+    # 死链自检：抽错的地址在这里就被挡下，不进 JSON，前端不会点出「地址不存在」
+    alive, dead = [], []
+    for x in out:
+        ok, page_title = policy_url_alive(x["url"])
+        if ok:
+            x["verified_at"] = int(time.time())
+            alive.append(x)
+        else:
+            dead.append((x["title"], x["url"], page_title))
+    if dead:
+        print("     [!] 死链剔除 %d 条（原文打不开，不写入）" % len(dead))
+        for t, u, pt in dead[:5]:
+            print("         - %s | %s | 页标题=%s" % (t[:26], u[:60], pt[:20] or "空"))
+    out = alive
 
     out.sort(key=lambda x: (x.get("ts") or 0), reverse=True)
     for i, x in enumerate(out):
@@ -917,6 +1168,8 @@ def build_news(raw):
         "total": sum(len(v) for v in blocks.values()),
         "raw_count": len(raw),
         "dedup_dropped": len(tagged) - len(uniq),
+        # 各源本次抓取健康度，供 qa 区分「数据不合格」与「上游源站挂了」
+        "source_status": dict(SOURCE_STATUS),
     }
 
 

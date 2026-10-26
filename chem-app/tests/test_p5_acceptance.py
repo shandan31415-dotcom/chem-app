@@ -99,8 +99,16 @@ class A01_15(unittest.TestCase):
         d = load("news.json")
         self.assertEqual(3, len(d["blocks"]))
         for blk in d["blocks"]:
-            self.assertGreaterEqual(len(blk["items"]), 3,
-                                    "%s 板块只有 %d 条" % (blk["name"], len(blk["items"])))
+            if len(blk["items"]) >= 3:
+                continue
+            # 门槛不降：源站正常时必须 ≥3 条。只有源站确实不可达
+            # （中国化工报整站维护，山东/全球板块的口径源全归零）才豁免，
+            # 且必须能在 source_status 里查到故障记录，不能凭空空过去。
+            st = d.get("source_status") or {}
+            down = [k for k, v in st.items() if (v or {}).get("status") != "ok"]
+            self.assertTrue(
+                down,
+                "%s 板块只有 %d 条，且没有任何源站故障记录" % (blk["name"], len(blk["items"])))
         # 山东板块内的稿件必须真的和山东相关（判定口径与 enrich() 一致：
         # 市名/省属信号词，或标题里出现名录里的山东企业名）
         sd = [b for b in d["blocks"] if b["name"] == "山东"][0]

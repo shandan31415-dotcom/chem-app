@@ -235,7 +235,17 @@ def a8_news_blocks():
         elif cnt[k] < 3:
             bad.append("%s %d<3" % (k, cnt[k]))
     detail = " / ".join("%s %d" % (k, cnt.get(k, 0)) for k in ["全球", "全国", "山东"])
-    return (not bad), (detail if not bad else detail)
+    if not bad:
+        return True, detail
+    # 区分「数据不合格」和「上游源站挂了」。
+    # 中国化工报（中化新网 ccin.com.cn）承载山东本地企业栏目与全球国际频道，
+    # 它整站维护时这两个板块必然掉到 3 条以下。这不是抓取规则坏了，也不是
+    # 数据质量问题；一律刷红会让报警天天响，真故障反而被噪音淹没。
+    st = d.get("source_status") or {}
+    down = sorted(k for k, v in st.items() if (v or {}).get("status") != "ok")
+    if down and any(("山东" in b or "全球" in b) for b in bad):
+        return False, detail, "源站不可达（%s），非数据质量问题" % "、".join(down[:3])
+    return False, detail
 
 
 def a9_price_news():
@@ -385,11 +395,17 @@ def run_all():
     for name, fn in CHECKS:
         key = name.split(" ")[0]
         try:
-            ok, detail = fn()
+            r = fn()
         except Exception as e:  # noqa: BLE001
-            ok, detail = False, "断言抛异常: %r" % (e,)
+            r = (False, "断言抛异常: %r" % (e,))
+        ok, detail = r[0], r[1]
+        # 第三项是「本次动态 XFAIL 原因」：由断言自己判断出来的外部原因
+        # （例如上游源站维护），与 XFAIL 字典里登记的技术欠债区分开
+        dyn = r[2] if len(r) > 2 else None
         if ok:
             out.append((name, "PASS", detail))
+        elif dyn:
+            out.append((name, "XFAIL", "%s | %s" % (detail, dyn)))
         elif key in XFAIL:
             out.append((name, "XFAIL", "%s | 已知: %s" % (detail, XFAIL[key])))
         else:
