@@ -8,6 +8,7 @@
   "projectname": "chem-mini",
   "setting": {
     "urlCheck": false,
+    "cloudfunctionRoot": "cloudfunctions/",
     "es6": true,
     "enhance": true,
     "postcss": true,
