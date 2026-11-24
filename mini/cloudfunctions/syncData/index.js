@@ -27,27 +27,34 @@ const COLLECTION = 'snapshot';
 const DOC_ID = 'latest';
 const LOG_COLLECTION = 'sync_log';
 
+/**
+ * 取数通道。**全部并发发起，谁先成功用谁**——串行试是上一版超时的根因：
+ * 四个源各自 8~12 秒超时，串起来 42 秒，超过了云函数的时间上限。
+ *
+ * 腾讯云函数在国内访问 GitHub 域名不稳定，所以额外挂两个公共加速代理兜底。
+ * 代理只做透明转发，返回内容仍要过 check() 结构校验，且首选的仍是自家 Pages。
+ */
+const RAW = 'https://raw.githubusercontent.com/' + REPO + '/' + BRANCH + '/' + FILE;
+
 const SOURCES = [
   {
-    name: 'github-raw',
-    url: 'https://raw.githubusercontent.com/' + REPO + '/' + BRANCH + '/' + FILE,
-    timeout: 8000,
-  },
-  {
-    // Pages 是 CDN，命中缓存时最快；daily.yml 提交后会主动触发 Pages 重新部署
+    // 自家 CDN，最可信；daily.yml 提交后会主动触发 Pages 重新部署
     name: 'github-pages',
     url: 'https://shandan31415-dotcom.github.io/chem-app/data/cloud_snapshot.json',
-    timeout: 10000,
+    timeout: 6000,
+  },
+  { name: 'github-raw', url: RAW, timeout: 6000 },
+  { name: 'ghfast', url: 'https://ghfast.top/' + RAW, timeout: 6000 },
+  { name: 'gh-proxy', url: 'https://gh-proxy.com/' + RAW, timeout: 6000 },
+  {
+    name: 'jsdelivr-gcore',
+    url: 'https://gcore.jsdelivr.net/gh/' + REPO + '@' + BRANCH + '/' + FILE,
+    timeout: 6000,
   },
   {
     name: 'jsdelivr',
     url: 'https://cdn.jsdelivr.net/gh/' + REPO + '@' + BRANCH + '/' + FILE,
-    timeout: 12000,
-  },
-  {
-    name: 'jsdelivr-gcore',
-    url: 'https://gcore.jsdelivr.net/gh/' + REPO + '@' + BRANCH + '/' + FILE,
-    timeout: 12000,
+    timeout: 6000,
   },
 ];
 
@@ -121,59 +128,77 @@ async function ensureCollection(name) {
 
 /* ---------------------------------------------------------------- 入口 */
 
+/** 并发竞速：第一个通过结构校验的快照胜出；全部失败时抛出错误清单 */
+function raceOk(sources) {
+  return new Promise((resolve, reject) => {
+    const errors = [];
+    let left = sources.length;
+    if (!left) {
+      reject(['没有可用数据源']);
+      return;
+    }
+    sources.forEach((s) => {
+      getText(s.url, s.timeout)
+        .then((txt) => {
+          const snap = JSON.parse(txt);
+          check(snap);
+          resolve({ snap: snap, source: s.name, url: s.url });
+        })
+        .catch((e) => {
+          errors.push(s.name + ': ' + String((e && e.message) || e).slice(0, 120));
+          left -= 1;
+          if (left === 0) reject(errors);
+        });
+    });
+  });
+}
+
 exports.main = async () => {
   const startedAt = Date.now();
-  const errors = [];
-
-  for (const s of SOURCES) {
-    try {
-      const txt = await getText(s.url, s.timeout);
-      const snap = JSON.parse(txt);
-      check(snap);
-
-      const doc = {
-        payload: snap,
-        synced_at: new Date(),
-        source_url: s.url,
-        source_name: s.name,
-        policy_count: snap.policies.items.length,
-        price_count: (snap.prices && snap.prices.count) || 0,
-        data_date: snap.meta.updated_at_text,
-      };
-
-      try {
-        await db.collection(COLLECTION).doc(DOC_ID).set({ data: doc });
-      } catch (e) {
-        // 集合还没建：建一次再写
-        await ensureCollection(COLLECTION);
-        await db.collection(COLLECTION).doc(DOC_ID).set({ data: doc });
-      }
-
-      const summary = {
-        ok: true,
-        source: s.name,
-        policies: doc.policy_count,
-        data_date: doc.data_date,
-        ms: Date.now() - startedAt,
-      };
-      console.log('sync ok', JSON.stringify(summary));
-      return summary;
-    } catch (e) {
-      const msg = s.name + ': ' + String((e && e.message) || e).slice(0, 160);
-      errors.push(msg);
-      console.warn('sync fail', msg);
-    }
-  }
-
-  // 全挂：保留云库里的旧快照，只记日志，便于下次排查
+  let hit;
   try {
-    await ensureCollection(LOG_COLLECTION);
-    await db.collection(LOG_COLLECTION).add({
-      data: { at: new Date(), ok: false, errors: errors, ms: Date.now() - startedAt },
-    });
-  } catch (e) {
-    console.error('写日志失败', e);
+    hit = await raceOk(SOURCES);
+  } catch (errors) {
+    // 全挂：保留云库里的旧快照，只记日志，便于下次排查
+    const errs = Array.isArray(errors) ? errors : [String(errors)];
+    try {
+      await ensureCollection(LOG_COLLECTION);
+      await db.collection(LOG_COLLECTION).add({
+        data: { at: new Date(), ok: false, errors: errs, ms: Date.now() - startedAt },
+      });
+    } catch (e) {
+      console.error('写日志失败', e);
+    }
+    console.warn('sync 全部失败', errs.join(' | '));
+    return { ok: false, errors: errs, ms: Date.now() - startedAt };
   }
 
-  return { ok: false, errors: errors };
+  const snap = hit.snap;
+  const doc = {
+    payload: snap,
+    synced_at: new Date(),
+    source_url: hit.url,
+    source_name: hit.source,
+    policy_count: snap.policies.items.length,
+    price_count: (snap.prices && snap.prices.count) || 0,
+    data_date: snap.meta.updated_at_text,
+  };
+
+  try {
+    await db.collection(COLLECTION).doc(DOC_ID).set({ data: doc });
+  } catch (e) {
+    // 集合还没建：建一次再写
+    await ensureCollection(COLLECTION);
+    await db.collection(COLLECTION).doc(DOC_ID).set({ data: doc });
+  }
+
+  const summary = {
+    ok: true,
+    source: hit.source,
+    policies: doc.policy_count,
+    data_date: doc.data_date,
+    ms: Date.now() - startedAt,
+  };
+  console.log('sync ok', JSON.stringify(summary));
+  return summary;
 };
