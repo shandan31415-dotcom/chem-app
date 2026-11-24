@@ -1,0 +1,82 @@
+<view class="wrap">
+
+  <view class="card searchbox">
+    <view class="sbar">
+      <text class="sic">⌕</text>
+      <input placeholder="搜品类或产品，如 MDI / 纯碱 / 轮胎" value="{{q}}" bindinput="onInput" confirm-type="search" />
+      <text class="sx" wx:if="{{q}}" bindtap="clearQ">✕</text>
+    </view>
+  </view>
+
+  <block wx:if="{{q}}">
+    <view class="hint" wx:if="{{hits.length}}">匹配 {{hits.length}} / {{total}} 个品类</view>
+    <view class="card" wx:if="{{hits.length}}">
+      <view class="row" wx:for="{{hits}}" wx:key="id" data-url="/pages/cat/cat?id={{item.id}}" bindtap="go">
+        <view class="main">
+          <view class="rt">{{item.name}}</view>
+          <view class="rm">{{item.one_line}}</view>
+        </view>
+        <text class="arrow">›</text>
+      </view>
+    </view>
+    <view class="card" wx:if="{{!hits.length}}">
+      <view class="empty">没有找到「{{q}}」
+        <view style="font-size:12px;margin-top:6px">换个说法试试，比如「聚丙烯」而不是「PP 料」</view>
+      </view>
+    </view>
+  </block>
+
+  <block wx:else>
+
+    <view class="sec-title">七大板块 <text class="subtle">山东化工产业体系 · 点进去看介绍与标杆企业</text></view>
+    <view class="card">
+      <view class="boards">
+        <view class="board-node" wx:for="{{boardList}}" wx:key="key"
+              data-url="/pages/board/board?key={{item.key}}" bindtap="go">
+          <view class="bn">{{item.name}}</view>
+          <view class="bc">{{item.count}} 个品类</view>
+        </view>
+      </view>
+    </view>
+
+    <view class="sec-title">产业链位置 <text class="subtle">上中下游 · 点一段看该环节全部品类</text></view>
+    <view class="card">
+      <view class="chainbar">
+        <view class="chain-node chain-{{item.key}}" wx:for="{{stages}}" wx:key="key"
+              data-url="/pages/chain/chain?key={{item.key}}" bindtap="go">
+          <view class="cn">{{item.short}}</view>
+          <view class="cs">{{item.count}} 品类</view>
+        </view>
+      </view>
+    </view>
+
+    <view class="chips" style="margin-top:2px">
+      <view class="chip {{chainFilter === '' ? 'on' : ''}}" data-k="" bindtap="onChain">全部</view>
+      <view class="chip {{chainFilter === item.key ? 'on' : ''}}" wx:for="{{stages}}" wx:key="key"
+            data-k="{{item.key}}" bindtap="onChain">{{item.short}}</view>
+    </view>
+
+    <block wx:for="{{groups}}" wx:key="name" wx:for-item="g">
+      <view class="sec-title">{{g.name}} <text class="subtle">{{g.count}}</text></view>
+      <view class="card">
+        <view class="row" wx:for="{{g.items}}" wx:key="id"
+              data-url="/pages/cat/cat?id={{item.id}}" bindtap="go">
+          <view class="main">
+            <view class="rt">{{item.name}}<text class="tag cat" wx:if="{{item.learned}}">已学</text></view>
+            <view class="rm">{{item.one_line}}</view>
+          </view>
+          <text class="tag chg-{{item.chIdx}}" wx:if="{{item.chShort}}">{{item.chShort}}</text>
+          <text class="arrow">›</text>
+        </view>
+      </view>
+    </block>
+
+    <view class="hint">
+      共 {{total}} 个品类 / {{groupCount}} 组 · 每个品类都按成本锚、需求锚、供给、山东位置、流向、储运门槛六问展开 · 整理日期 {{dataDate}}
+    </view>
+
+    <view class="disclaimer">{{disclaimer}}</view>
+
+  </block>
+
+</view>

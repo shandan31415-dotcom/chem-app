@@ -14,6 +14,7 @@ sys.path.insert(0, HERE)
 
 from _data_city import CITY_META          # noqa: E402
 from _data_ent import CITY_ENTS, NEW_PARKS, to_ent  # noqa: E402
+from _data_monitor import MONITOR                   # noqa: E402
 from _data_parks84 import PARKS84, CITY_NAMES       # noqa: E402
 from _data_cat import VAR_ID, SD, EXTRA, GROUPS     # noqa: E402
 
@@ -81,6 +82,8 @@ PARK_RENAME = {
     "临沂郯城化工产业园": "郯城化工产业园",
     "德州运河经济开发区化工园": "德州运河恒升化工产业园",
     "聊城化工新材料产业园": "聊城化工产业园",
+    "济宁新材料产业园": "济宁化工产业园",
+    "青岛新河生态化工科技产业基地": "青岛新河化工产业园",
 }
 
 
@@ -176,23 +179,43 @@ def build_parks():
             c.setdefault("enterprises", []).append(to_ent(t))
             exists.add(t[0])
 
+    # 3.5) 省级化工重点监控点（园区外企业，按地市收录，不挂园区）
+    added_mon = 0
+    for code, rows in MONITOR.items():
+        c = by_code.get(code)
+        if not c:
+            continue
+        exists = {e["name"] for e in c.get("enterprises", [])}
+        exists |= {e["name"] for p in c["parks"] for e in p.get("enterprises", [])}
+        for t in rows:
+            if t[0] in exists:
+                continue
+            c.setdefault("enterprises", []).append(to_ent(t))
+            exists.add(t[0])
+            added_mon += 1
+
     d["cities"] = new_cities
 
     # 4) 统计与署名（PRD 7.2：每个数据文件都必须带 updated_at）
     d["updated_at"] = int(time.time())
-    d["updated_at_text"] = "2026-10-23"
+    d["updated_at_text"] = "2026-11-23"
     d["source"] = "人工整理 + 资料库《山东化工产业地图》《化工品种速查手册》 + 山东省工信厅官方认定名单"
-    d["note"] = ("山东省经认定的化工园区共 84 家（原 85 家中高密仁和化工产业园已取消资格，按 84 家计）。"
-                 "本名录覆盖全部 84 家园区、16 地市；专业化工园区单独标注。"
-                 "园区内企业为「重点/代表性企业」人工整理，不是全量工商名录，新增园区暂未收录企业的显示「名录整理中」，不做编造。"
+    d["note"] = ("山东省经省认定的化工园区共 85 家（75 家化工园区 + 10 家专业化工园区，"
+                 "据省政府办公厅第一批至第四批认定名单）。其中高密仁和化工产业园因 2025 年 5·27 事故"
+                 "自 2025 年 6 月起被暂停园区资格，故本名录按 84 家在营园区收录，潍坊为 8 家。"
+                 "本名录覆盖 84 家园区、16 地市；专业化工园区单独标注。"
+                 "企业名录含园区内重点/代表性企业，以及省政府认定的化工重点监控点（园区外企业，"
+                 "全省 125 家，已收录其中大部分，按地市收录、不挂园区）。"
+                 "企业名录为「重点/代表性企业」人工整理，不是全量工商名录，暂无企业的园区显示「名录整理中」，不做编造。"
                  "园区归属、区县以官方最新公示为准，标注「待核」的条目建议核对。")
     tot_p = sum(len(c["parks"]) for c in new_cities)
     tot_e = sum(len(p["enterprises"]) for c in new_cities for p in c["parks"]) + \
         sum(len(c.get("enterprises", [])) for c in new_cities)
     d["counts"] = {"cities": len(new_cities), "parks": tot_p, "ents": tot_e}
     json.dump(d, open(path, "w", encoding="utf-8"), ensure_ascii=False, indent=1)
-    print("parks.json ->  地市 %d / 园区 %d / 企业 %d（继承 %d，新园区 %d）"
-          % (len(new_cities), tot_p, tot_e, sum(len(v) for v in inherit_ents.values()), tot_p - len(inherit_ents)))
+    print("parks.json ->  地市 %d / 园区 %d / 企业 %d（继承 %d，新园区 %d，新增重点监控点 %d）"
+          % (len(new_cities), tot_p, tot_e, sum(len(v) for v in inherit_ents.values()),
+             tot_p - len(inherit_ents), added_mon))
 
 
 def build_cats():

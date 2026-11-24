@@ -1,0 +1,8 @@
+/* 正文 .cintro 已提到 app.wxss，这里只留园区页特有的标签行 */
+.tagsline {
+  padding: 12px 14px 0;
+}
+.tag.big {
+  font-size: 11.5px;
+  padding: 3px 9px;
+}

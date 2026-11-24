@@ -1,0 +1,38 @@
+<view class="wrap" wx:if="{{p}}">
+
+  <view class="dt">{{p.name}}</view>
+  <view class="dsub">{{p.cityName}} · {{p.district}} · {{p.type}}</view>
+
+  <view class="card">
+    <view class="tagsline">
+      <text class="tag {{p.lvlCls}} big">{{p.level}}</text>
+    </view>
+    <view class="cintro">{{p.intro}}</view>
+  </view>
+
+  <view class="sec-title">园内代表企业 {{ents.length}} 家</view>
+  <view class="card" wx:if="{{ents.length}}">
+    <view class="row" wx:for="{{ents}}" wx:key="i"
+          data-url="/pages/ent/ent?pid={{p.id}}&i={{item.i}}" bindtap="go">
+      <view class="main">
+        <view class="rt">{{item.name}}</view>
+        <view class="rm">
+          <text class="tag he" wx:if="{{item.high}}">重点</text>
+          <text>{{item.products}}</text>
+          <text class="tag" wx:if="{{item.verify}}">待核</text>
+        </view>
+      </view>
+      <text class="arrow">›</text>
+    </view>
+  </view>
+  <view class="card" wx:else>
+    <view class="empty" style="padding:22px 16px">该园区为省级认定化工园区，企业名录整理中。
+      <view style="font-size:12px;margin-top:6px">有可靠名录后再补齐，不编造</view>
+    </view>
+  </view>
+
+  <view class="hint">整理日期：{{dataDate}}</view>
+
+</view>
+
+<view class="empty" wx:else>未找到该园区</view>

@@ -1,0 +1,49 @@
+<view class="wrap" wx:if="{{b}}">
+
+  <view class="dt">{{b.name}}</view>
+  <view class="dsub">山东化工「七大板块」之一 · {{b.count}} 个品类</view>
+
+  <view class="card">
+    <view class="card-hd">板块介绍</view>
+    <view class="cintro">{{b.intro}}</view>
+  </view>
+
+  <block wx:if="{{leaders.length}}">
+    <view class="sec-title">标杆企业</view>
+    <view class="card">
+      <block wx:for="{{leaders}}" wx:key="name">
+        <view class="row" wx:if="{{item.url}}" data-url="{{item.url}}" bindtap="go">
+          <view class="main">
+            <view class="rt">{{item.name}}</view>
+            <view class="rm">园区收录 · 点看详情</view>
+          </view>
+          <text class="arrow">›</text>
+        </view>
+        <view class="row" wx:else>
+          <view class="main">
+            <view class="rt">{{item.name}}</view>
+            <view class="rm"><text class="tag">行业标杆</text></view>
+          </view>
+        </view>
+      </block>
+    </view>
+  </block>
+
+  <view class="sec-title">本板块品类 <text class="subtle">点进去看六问与代表产品</text></view>
+  <view class="card">
+    <view class="row" wx:for="{{cats}}" wx:key="id" data-url="/pages/cat/cat?id={{item.id}}" bindtap="go">
+      <view class="main">
+        <view class="rt">{{item.name}}</view>
+        <view class="rm">{{item.one_line}}</view>
+      </view>
+      <text class="arrow">›</text>
+    </view>
+  </view>
+
+  <view class="hint">板块归类为人工整理（73 个品类各归一个主板块），仅供参考；数据来源：{{source}}</view>
+
+  <view class="disclaimer">{{disclaimer}}</view>
+
+</view>
+
+<view class="empty" wx:else>未找到该板块</view>

@@ -1,0 +1,23 @@
+.boards {
+  display: flex;
+  flex-wrap: wrap;
+  padding: 6px;
+}
+.board-node {
+  width: 33.33%;
+  box-sizing: border-box;
+  padding: 9px 4px;
+  text-align: center;
+}
+.board-node .bn {
+  font-size: 14px;
+  font-weight: 600;
+  color: #0b6b5e;
+}
+.board-node .bc {
+  font-size: 10.5px;
+  color: #a8aeb8;
+  margin-top: 2px;
+}
+
+/* 产业链条 .chainbar / .chain-node 已提到 app.wxss，与产业链详情页共用 */

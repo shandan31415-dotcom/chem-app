@@ -60,6 +60,9 @@ def http_get(url, referer=None, timeout=25, retries=2):
 
 TAG_RE = re.compile(r"<[^>]+>")
 WS_RE = re.compile(r"[ \t\u3000\xa0]+")
+# 政府站正文/标题里常混入零宽字符（\u200b 断词、\ufeff BOM），肉眼看不见，
+# 但会让「煤化工」这种关键词匹配失败——曾经就是它把一条现代煤化工文件挡在门外。
+ZW_RE = re.compile(r"[\u200b-\u200f\u2060\ufeff]")
 
 
 def clean(s, limit=None):
@@ -67,6 +70,8 @@ def clean(s, limit=None):
         return ""
     s = TAG_RE.sub(" ", str(s))
     s = html.unescape(s).replace("\r", " ").replace("\n", " ")
+    s = ZW_RE.sub("", s)
+    s = re.sub(r"[（(]有效性[：:][^）)]*[）)]?\s*$", "", s)
     s = WS_RE.sub(" ", s).strip()
     if limit and len(s) > limit:
         s = s[:limit].rstrip() + "…"
@@ -917,27 +922,128 @@ def drop_stale(items, max_days=None, now=None):
 
 
 # ---------------------------------------------------------------- 政策
-KW_POLICY = ["化工", "石化", "化学", "新材料", "危险化学品", "园区", "炼化", "塑料", "橡胶", "涂料"]
+# 相关性分两档，解决「真政策被关键词挡在门外」：
+#   强相关：标题里直接出现行业词（化工/石化/化学/新材料…），命中公文类型即收；
+#   中相关：标题不带行业词，但讲的是园区、产能、安全、排污、许可这类
+#          化工企业天天要对照的事。只在「行业属性明确」的信源上收
+#          （industry=True，如省生态环境厅的鲁环发/鲁环函），
+#          否则会把生态环境厅的核电厂、土壤规划之类的稿子全灌进来。
+KW_POLICY = ["化工", "石化", "化学", "炼化", "炼油", "氯碱", "化肥", "农药", "轮胎",
+             "橡胶", "涂料", "塑料", "新材料", "危险化学品", "危化", "精细化工",
+             "煤化工", "盐化工", "纯碱", "烧碱", "甲醇", "烯烃", "芳烃", "树脂",
+             "氟化工", "硅材料", "锂电材料", "助剂", "石化行业", "化工园区", "焦化"]
+KW_POLICY_MED = ["园区", "产能", "两高", "重点行业", "制造业", "技改", "数智化",
+                 "数字化转型", "安全生产", "排污", "环评", "新污染物", "危险废物",
+                 "固废", "排放", "能耗", "碳达峰", "双碳", "许可", "储备",
+                 "环境影响评价", "建设项目", "名录", "绿色", "节能", "能效",
+                 "降碳", "循环", "清洁生产", "综合利用"]
+# 跨行业主题：会员企业普遍要对照的绿色低碳口径。这类文件多由工信部/省政府
+# 一次性对全行业发布（绿色工厂名单、零碳工厂试点、碳市场规则），标题里
+# 常常不写「化工」，靠行业词会漏。命中即收，但若同时命中 EXCL 里的
+# 非化行业（钢铁/水泥/纺织…）且没有化工强词，仍然丢弃。
+# 强主题：跨行业、但化工必然被覆盖（碳市场扩围下一个就是化工），
+# 即使标题写的是钢铁水泥也照收。
+KW_POLICY_CROSS_STRONG = ["碳市场", "碳排放权", "碳交易", "碳配额", "碳足迹", "碳标签",
+                          "碳关税", "CBAM", "零碳工厂", "零碳园区", "近零碳",
+                          "能耗双控", "节能降碳", "绿电", "绿证", "碳排放"]
+# 弱主题：名单类/单项奖补，非化行业的专项不收（避免纺织、食品的绿色工厂刷屏）
+KW_POLICY_CROSS_WEAK = ["绿色工厂", "绿色制造", "绿色工业园区", "绿色供应链",
+                        "清洁生产", "循环经济", "资源综合利用", "再生资源", "工业固废"]
 KW_DOCTYPE = ["通知", "意见", "方案", "办法", "规划", "条例", "公告", "决定", "批复",
-              "细则", "导则", "指南", "规定", "目录", "标准"]
+              "细则", "导则", "指南", "规定", "目录", "标准", "清单", "规则"]
+# 事务性 + 解读稿：一律不进政策库（库里只放公文原文，「一图读懂/答记者问」
+# 这类改版后同一份文件会占三四条，且内容是二次加工，不适合当依据）。
+KW_POLICY_ADMIN_EXCL = ["答记者问", "一图读懂", "图解", "解读", "政策问答",
+                        "新闻发布会", "专访", "评论", "专家推荐", "职称", "表彰",
+                        "培训", "招聘"]
+# 排除：明确不涉化的行业（环保口的钢铁、水泥、核电、农业农村稿）。
+KW_POLICY_EXCL = ["钢铁", "水泥", "玻璃", "陶瓷", "有色金属", "造纸", "印染", "核电",
+                  "农村", "宅基地", "土壤", "地下水", "生态保护", "自然保护区", "湿地",
+                  "草原", "海洋生态", "碳汇", "生态补偿", "火电", "核电", "核技术", "轨道交通",
+                  "机动车", "汽车", "纺织", "服装", "食品", "家电", "家具", "船舶",
+                  "航空", "医药", "冶炼", "人事",
+                  "表彰", "培训", "会议", "招聘"]
 
+# pages：翻几页（1 = 只抓首页）。政策不像资讯滚动那么快，翻 2~3 页就能把
+# 半年的存量捞干净，不必爬全站。
+# paginate：这些政府站的分页写法各不相同，实测过：
+#   query  -> xxx/index.html?pageNum=2   （山东省工信厅，大汉版通）
+#   html   -> xxx/index_1.html           （发改委、省生态环境厅）
+#   shtml  -> xxx/index_1.shtml          （生态环境部）
 POLICY_SOURCES = [
-    {"level": "山东省", "org": "山东省工业和信息化厅",
-     "url": "http://gxt.shandong.gov.cn/col/col103862/index.html",
+    {"level": "山东省", "org": "山东省工业和信息化厅", "paginate": "query",
+     "url": "http://gxt.shandong.gov.cn/col/col103862/index.html", "pages": 4,
      "pattern": r'href="([^"]*?/art/\d{4}/\d{1,2}/\d{1,2}/art_\d+_\d+\.html)"[^>]*>\s*([^<]{8,90}?)\s*</a>'},
-    {"level": "山东省", "org": "山东省工业和信息化厅",
-     "url": "http://gxt.shandong.gov.cn/col/col103863/index.html",
+    {"level": "山东省", "org": "山东省工业和信息化厅", "paginate": "query",
+     "url": "http://gxt.shandong.gov.cn/col/col103863/index.html", "pages": 4,
      "pattern": r'href="([^"]*?/art/\d{4}/\d{1,2}/\d{1,2}/art_\d+_\d+\.html)"[^>]*>\s*([^<]{8,90}?)\s*</a>'},
-    {"level": "国家级", "org": "国家发展改革委",
-     "url": "https://www.ndrc.gov.cn/xxgk/zcfb/ghxwj/",
+    {"level": "国家级", "org": "国家发展改革委", "paginate": "html",
+     "url": "https://www.ndrc.gov.cn/xxgk/zcfb/ghxwj/", "pages": 2,
      "pattern": r'href="([^"]*?/t\d{8}_\d+\.html)"[^>]*>\s*([^<]{8,90}?)\s*</a>'},
-    {"level": "国家级", "org": "国家发展改革委",
-     "url": "https://www.ndrc.gov.cn/xxgk/zcfb/tz/",
+    {"level": "国家级", "org": "国家发展改革委", "paginate": "html",
+     "url": "https://www.ndrc.gov.cn/xxgk/zcfb/tz/", "pages": 2,
      "pattern": r'href="([^"]*?/t\d{8}_\d+\.html)"[^>]*>\s*([^<]{8,90}?)\s*</a>'},
-    {"level": "国家级", "org": "生态环境部",
-     "url": "https://www.mee.gov.cn/zcwj/",
+    {"level": "国家级", "org": "生态环境部", "paginate": "shtml",
+     "url": "https://www.mee.gov.cn/zcwj/", "pages": 4,
+     "pattern": r'href="([^"]*?/t\d{8}_\d+\.s?html)"[^>]*>\s*([^<]{8,90}?)\s*</a>'},
+    # 省生态环境厅：鲁环发（发文）、鲁环函（函件）。环保口是化工企业合规成本
+    # 的主要来源，原来完全没覆盖；这两个栏目是静态列表，实测能稳定抓。
+    {"level": "山东省", "org": "山东省生态环境厅", "paginate": "html", "industry": True,
+     "referer": "http://xxgk.sdein.gov.cn/",
+     "url": "http://xxgk.sdein.gov.cn/zfwj/lhf/", "pages": 2,
+     "pattern": r'href="([^"]*?t\d{8}_\d+\.html)"[^>]*>\s*([^<]{8,90}?)\s*</a>'},
+    {"level": "山东省", "org": "山东省生态环境厅", "paginate": "html", "industry": True,
+     "referer": "http://xxgk.sdein.gov.cn/",
+     "url": "http://xxgk.sdein.gov.cn/zfwj/lhh/", "pages": 2,
+     "pattern": r'href="([^"]*?t\d{8}_\d+\.html)"[^>]*>\s*([^<]{8,90}?)\s*</a>'},
+    # 发改委「发改委文件」：产业结构调整指导目录、石化产业规划布局这类东西都在这。
+    {"level": "国家级", "org": "国家发展改革委", "paginate": "html",
+     "url": "https://www.ndrc.gov.cn/xxgk/zcfb/fzggwl/", "pages": 2,
+     "pattern": r'href="([^"]*?/t\d{8}_\d+\.html)"[^>]*>\s*([^<]{8,90}?)\s*</a>'},
+    # 生态环境部「部令规章」：环评分类管理名录、新化学物质登记办法这类
+    # 直接决定化工项目能不能批的规章，标题常常不带「化工」二字，故 industry=True。
+    {"level": "国家级", "org": "生态环境部", "paginate": "html", "industry": True,
+     "url": "https://www.mee.gov.cn/zcwj/bwj/", "pages": 2,
+     "med": ["园区", "建设项目", "环境影响评价", "排污许可", "危险废物", "固体废物",
+             "名录", "新污染物", "两高", "碳排放", "产能"],
      "pattern": r'href="([^"]*?/t\d{8}_\d+\.s?html)"[^>]*>\s*([^<]{8,90}?)\s*</a>'},
 ]
+
+
+def policy_page_url(src, i):
+    """第 i 页（0 起）的列表地址"""
+    if i == 0:
+        return src["url"]
+    mode = src.get("paginate", "none")
+    if mode == "query":
+        return "%s?pageNum=%d" % (src["url"], i + 1)
+    if mode == "html":
+        return "%sindex_%d.html" % (src["url"], i)
+    if mode == "shtml":
+        return "%sindex_%d.shtml" % (src["url"], i)
+    return None
+
+
+def policy_relevant(title, src):
+    """标题是否够格进政策库（公文类型 + 相关性两档 + 排除项）"""
+    if not any(k in title for k in KW_DOCTYPE):
+        return False
+    if any(k in title for k in KW_POLICY_ADMIN_EXCL):
+        return False
+    if "专家" in title and any(k in title for k in ("推荐", "评选", "遴选", "征集")):
+        return False
+    if any(k in title for k in KW_POLICY):
+        return True
+    if any(k in title for k in KW_POLICY_CROSS_STRONG):
+        return True
+    if any(k in title for k in KW_POLICY_EXCL):
+        return False
+    if any(k in title for k in KW_POLICY_CROSS_WEAK):
+        return True
+    med = src.get("med") or KW_POLICY_MED
+    if src.get("industry") and any(k in title for k in med):
+        return True
+    return False
 
 
 def date_from_url(url):
@@ -1038,44 +1144,59 @@ def policy_url_alive(url, timeout=12):
     return True, title
 
 
-def fetch_policies():
-    out, seen = [], set()
+POLICY_KEEP_MAX = 150      # 最多留这么多条（约 8~10 年存量，够查）
+POLICY_KEEP_YEARS = 12     # 或按年份兜底：只留最近 12 年
+
+
+def fetch_policies(prev=None):
+    """抓政策。prev 传上次的 items —— 政策不像资讯会滚动，一旦抓到就该留住，
+    不能每轮清空重抓（那样只留得住「此刻还在列表首页」的几条，历史永远攒不起来）。"""
+    prev = [p for p in (prev or []) if p.get("url") and p.get("title")]
+    seen_url, seen_title = set(), set()
+    out = []
+    for p in prev:
+        seen_url.add(p["url"])
+        seen_title.add(p["title"])
+        out.append(p)
+
+    fresh = []
     for src in POLICY_SOURCES:
-        try:
-            s = http_get(src["url"]).decode("utf-8", "ignore")
-        except Exception as e:  # noqa: BLE001
-            print("  [!] 政策源失败 %s: %s" % (src["org"], str(e)[:50]))
-            continue
         got = 0
-        for h, t in re.findall(src["pattern"], s):
-            title = clean(t)
-            if not title or len(title) < 8 or title in seen:
-                continue
-            # 必须同时命中「化工主题」和「公文类型」，避免把新闻当政策
-            if not any(k in title for k in KW_POLICY):
-                continue
-            if not any(k in title for k in KW_DOCTYPE):
-                continue
-            seen.add(title)
-            url = resolve_policy_url(h, src)
-            ts = date_from_url(url)
-            out.append({"id": "pol%d" % (len(out) + 1), "title": title, "url": url,
-                        "level": src["level"], "org": src["org"], "ts": ts,
-                        "impact": policy_impact(title), "impact_src": "rule"})
-            got += 1
-        print("     %s %s: %d 条" % (src["level"], src["org"], got))
+        for i in range(src.get("pages", 1)):
+            page = policy_page_url(src, i)
+            if not page:
+                break
+            try:
+                s = http_get(page, referer=src.get("referer")).decode("utf-8", "ignore")
+            except Exception as e:  # noqa: BLE001
+                print("  [!] 政策源失败 %s 第%d页: %s" % (src["org"], i + 1, str(e)[:50]))
+                break
+            for h, t in re.findall(src["pattern"], s):
+                title = clean(t)
+                if not title or len(title) < 8 or title in seen_title:
+                    continue
+                if not policy_relevant(title, src):
+                    continue
+                url = resolve_policy_url(h, src)
+                if url in seen_url:
+                    continue
+                seen_url.add(url)
+                seen_title.add(title)
+                fresh.append({"id": "", "title": title, "url": url,
+                              "level": src["level"], "org": src["org"],
+                              "ts": date_from_url(url),
+                              "impact": policy_impact(title), "impact_src": "rule"})
+                got += 1
+        print("     %s %s: 新增 %d 条" % (src["level"], src["org"], got))
 
-    # URL 里没有日期的，回源补一次（限量 12 条，避免请求过多）
-    missing = [x for x in out if not x.get("ts")][:12]
-    for x in missing:
+    # URL 里没有日期的，回源补一次（限量 20 条，避免请求过多）
+    for x in [x for x in fresh if not x.get("ts")][:20]:
         x["ts"] = date_from_page(x["url"])
-    still = [x for x in out if not x.get("ts")]
-    if still:
-        print("     [!] 仍有 %d 条取不到日期，页面会显示「—」" % len(still))
 
-    # 死链自检：抽错的地址在这里就被挡下，不进 JSON，前端不会点出「地址不存在」
+    # 死链自检：抽错的地址在这里就被挡下，不进 JSON，前端不会点出「地址不存在」。
+    # 只验本轮新增的，历史条目上次已验过，不必天天重打一遍政府站。
     alive, dead = [], []
-    for x in out:
+    for x in fresh:
         ok, page_title = policy_url_alive(x["url"])
         if ok:
             x["verified_at"] = int(time.time())
@@ -1086,9 +1207,68 @@ def fetch_policies():
         print("     [!] 死链剔除 %d 条（原文打不开，不写入）" % len(dead))
         for t, u, pt in dead[:5]:
             print("         - %s | %s | 页标题=%s" % (t[:26], u[:60], pt[:20] or "空"))
-    out = alive
 
+    out.extend(alive)
+
+    # 清掉取不到日期的残条，免得页面上一堆「—」
+    dated = [x for x in out if x.get("ts")]
+    if len(dated) != len(out):
+        print("     [!] %d 条无日期，暂不展示" % (len(out) - len(dated)))
+    out = dated
+
+    def _doc_key(t):
+        m = re.search(r"《([^》]{6,})》", t)
+        return m.group(1) if m else ""
+
+    def _strip_no(t):
+        """去掉发文字号后缀，便于和「XX印发《YY》」比对"""
+        return re.sub(r"\s*[（(][^）)]*〔\d{4}〕[^）)]*[）)]\s*$", "", t)
+
+    # 人工补录（source=manual，见 merge_manual_policies.py）不参与自动去重：
+    # 那些条目是同事对照政府站逐条核过的，被书名号合并算法吞掉等于白录。
+    manual_items = [x for x in out if x.get("source") == "manual"]
+    out = [x for x in out if x.get("source") != "manual"]
+
+    kept, merged = {}, []
+    for x in sorted(out, key=lambda y: -(y.get("ts") or 0)):
+        k = _doc_key(x["title"])
+        if not k:                      # 标题里没有书名号的，直接保留（不能丢）
+            base = _strip_no(x["title"])
+            dup = next((m for m in merged
+                        if _doc_key(m["title"]) and _doc_key(m["title"]) in base
+                        and abs((m.get("ts") or 0) - (x.get("ts") or 0)) < 90 * 86400), None)
+            if dup:
+                if len(x["title"]) > len(dup["title"]):
+                    merged[merged.index(dup)] = x
+                continue
+            merged.append(x)
+            continue
+        prev_same = kept.get(k)
+        if prev_same and abs((prev_same.get("ts") or 0) - (x.get("ts") or 0)) < 90 * 86400:
+            # 留标题更长的那条（信息更全），短的那条是重复的印发/号令条目
+            if len(x["title"]) > len(prev_same["title"]):
+                kept[k] = x
+                merged[merged.index(prev_same)] = x
+            continue
+        kept[k] = x
+        merged.append(x)
+    # 反向补一刀：「XX印发《YY》」与「YY(发文字号)」两条并存时的合并
+    final = []
+    for x in merged:
+        c = _doc_key(x["title"])
+        if c:
+            twin = next((m for m in final
+                         if not _doc_key(m["title"])
+                         and _strip_no(m["title"]).strip("。 ") in (c, c + "的通知", c + "通知")), None)
+            if twin:
+                continue
+        final.append(x)
+    out = sorted(final + manual_items, key=lambda y: -(y.get("ts") or 0))
+
+    cutoff = time.time() - POLICY_KEEP_YEARS * 365 * 86400
+    out = [x for x in out if (x.get("ts") or 0) >= cutoff]
     out.sort(key=lambda x: (x.get("ts") or 0), reverse=True)
+    out = out[:POLICY_KEEP_MAX]
     for i, x in enumerate(out):
         x["id"] = "pol%d" % (i + 1)
     return out
@@ -1248,7 +1428,9 @@ def main():
     print("采集政策…")
     pol, err_pol = None, None
     try:
-        pol = fetch_policies()
+        old_pol = load("policies.json", {})
+        prev = old_pol.get("items", []) if isinstance(old_pol, dict) else []
+        pol = fetch_policies(prev)
         if not pol:
             raise RuntimeError("政策源全部为空")
     except Exception as e:  # noqa: BLE001

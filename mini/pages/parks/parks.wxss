@@ -1,0 +1,4 @@
+/* 地图页专属：窄屏下压缩图像留白 */
+.mapcard {
+  padding: 8px 7px 6px;
+}

@@ -1,0 +1,69 @@
+<view class="wrap" wx:if="{{c}}">
+
+  <view class="dt">{{c.name}}</view>
+  <view class="dsub">{{c.one_line}}</view>
+
+  <view class="card stagebar" wx:if="{{stage}}">
+    <text class="tag chg-{{stage.idx}}">产业链 · {{stage.short}}</text>
+    <text class="stagedesc">{{stage.desc}}</text>
+  </view>
+
+  <view class="card">
+    <view class="field" wx:for="{{fields}}" wx:key="k">
+      <view class="fk">{{item.k}}</view>
+      <view class="fv">{{item.v}}</view>
+    </view>
+  </view>
+
+  <view class="sec-title">代表产品</view>
+  <view class="card">
+    <view class="prodwrap">
+      <text class="tag cat" wx:for="{{products}}" wx:key="*this">{{item}}</text>
+    </view>
+  </view>
+
+  <view class="sec-title">头部企业</view>
+  <view class="card">
+    <block wx:for="{{leaders}}" wx:key="name">
+      <view class="row" wx:if="{{item.url}}" data-url="{{item.url}}" bindtap="go">
+        <view class="main">
+          <view class="rt">{{item.name}}</view>
+          <view class="rm">{{item.note}} · 园区收录</view>
+        </view>
+        <text class="arrow">›</text>
+      </view>
+      <view class="row" wx:else>
+        <view class="main">
+          <view class="rt">{{item.name}}</view>
+          <view class="rm">
+            <text>{{item.note ? item.note + ' · ' : ''}}不在山东名录（省外/国外）</text>
+            <text class="lk" data-n="{{item.name}}" bindtap="searchEnt">查山东据点</text>
+          </view>
+        </view>
+      </view>
+    </block>
+  </view>
+
+  <view class="sec-title">相关参考价</view>
+  <view class="card" wx:if="{{prices.length}}">
+    <view class="prow" wx:for="{{prices}}" wx:key="name"
+          data-url="/pages/price/price?name={{item.name}}" bindtap="go">
+      <view class="pn">{{item.name}}</view>
+      <view class="pp">
+        <text class="pv {{item.cls}}">{{item.price}}</text>
+        <text class="ps {{item.cls}}">{{item.chg}}</text>
+      </view>
+    </view>
+    <view class="hint" style="padding:8px 14px 10px">{{priceHint}}</view>
+  </view>
+  <view class="card" wx:else>
+    <view class="empty" style="padding:22px 20px">暂无对应报价品种
+      <view style="font-size:12px;margin-top:6px">这个品类在国内公开市场没有对应报价合约，不硬凑一个品种给你</view>
+    </view>
+  </view>
+
+  <view class="hint">品类知识为人工整理，行业变化快，发现出入请指出。</view>
+
+</view>
+
+<view class="empty" wx:else>未找到品类</view>

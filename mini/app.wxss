@@ -1,0 +1,569 @@
+/* 全局设计系统：尺寸、间距、配色与 web 版 styles.css 对齐，保证两端观感一致 */
+page {
+  background: #f4f5f7;
+  color: #141821;
+  font-size: 15px;
+  line-height: 1.5;
+  font-family: -apple-system, "PingFang SC", "Helvetica Neue", sans-serif;
+}
+
+.wrap {
+  padding: 10px 12px 24px;
+}
+
+/* ---------- 卡片 ---------- */
+.card {
+  background: #fff;
+  border-radius: 14px;
+  margin-bottom: 11px;
+  overflow: hidden;
+  box-shadow: 0 1px 2px rgba(16, 24, 40, 0.045);
+}
+
+.card-hd {
+  padding: 11px 14px 9px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #0b6b5e;
+  letter-spacing: 0.4px;
+  border-bottom: 1px solid #e8eaee;
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+}
+
+.card-hd .n {
+  color: #a8aeb8;
+  font-weight: 400;
+  letter-spacing: 0;
+  font-size: 11px;
+}
+
+.sec-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: #6b7280;
+  margin: 16px 2px 8px;
+  letter-spacing: 0.3px;
+}
+
+.subtle {
+  color: #a8aeb8;
+  font-weight: 400;
+}
+
+/* ---------- 列表行 ---------- */
+.row {
+  display: flex;
+  align-items: center;
+  padding: 13px 14px;
+  border-bottom: 1px solid #e8eaee;
+}
+.row:last-child {
+  border-bottom: 0;
+}
+.row .main {
+  flex: 1;
+  min-width: 0;
+}
+.row .rt {
+  font-size: 14.5px;
+  font-weight: 500;
+  line-height: 1.4;
+}
+.row .rm {
+  font-size: 11.5px;
+  color: #a8aeb8;
+  margin-top: 4px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  align-items: center;
+}
+.arrow {
+  color: #c8ced6;
+  font-size: 17px;
+  margin-left: 6px;
+  flex: 0 0 auto;
+}
+
+/* ---------- 标签 ---------- */
+.tag {
+  display: inline-block;
+  font-size: 10.5px;
+  padding: 1px 6px;
+  border-radius: 5px;
+  background: #f0f2f5;
+  color: #6b7280;
+  line-height: 1.6;
+  white-space: nowrap;
+}
+.tag.cat {
+  background: #e7f3f0;
+  color: #0b6b5e;
+}
+.tag.he {
+  background: #fff2e8;
+  color: #c2410c;
+}
+/* 「高端+基础」：橙色描边，与「高端为主」的实心橙区分开 */
+.tag.hem {
+  background: #fff;
+  color: #c2410c;
+  border: 0.5px solid #f5c9a8;
+}
+.tag.chg-0 {
+  background: #eef2ff;
+  color: #4f46e5;
+}
+.tag.chg-1 {
+  background: #ecfdf5;
+  color: #047857;
+}
+.tag.chg-2 {
+  background: #fef3c7;
+  color: #b45309;
+}
+
+/* ---------- 筛选 chip ---------- */
+.chips {
+  display: flex;
+  gap: 7px;
+  padding: 2px 2px 10px;
+  flex-wrap: wrap;
+}
+.chip {
+  border: 1px solid #e8eaee;
+  background: #fff;
+  color: #6b7280;
+  border-radius: 16px;
+  padding: 6px 13px;
+  font-size: 12.5px;
+  line-height: 1.2;
+}
+.chip.on {
+  background: #0b6b5e;
+  border-color: #0b6b5e;
+  color: #fff;
+  font-weight: 500;
+}
+.chip.sm {
+  padding: 4px 10px;
+  font-size: 11.5px;
+  border-radius: 13px;
+}
+
+/* ---------- 搜索框 ---------- */
+.sbar {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  background: #fafbfc;
+  border: 1px solid #e8eaee;
+  border-radius: 10px;
+  padding: 0 10px;
+  height: 38px;
+}
+.sbar .sic {
+  color: #a8aeb8;
+  font-size: 15px;
+}
+.sbar input {
+  flex: 1;
+  font-size: 14px;
+  height: 38px;
+  min-width: 0;
+}
+.sbar .sx {
+  color: #a8aeb8;
+  font-size: 13px;
+  padding: 0 2px;
+}
+.searchbox {
+  padding: 10px 12px 8px;
+}
+.skw {
+  display: flex;
+  gap: 6px;
+  margin-top: 8px;
+  flex-wrap: wrap;
+}
+
+/* ---------- 关键指标 ---------- */
+.kpis {
+  display: flex;
+  padding: 14px 0;
+}
+.kp {
+  flex: 1;
+  text-align: center;
+  border-right: 1px solid #f0f2f5;
+}
+.kp:last-child {
+  border-right: 0;
+}
+.kp .kpn {
+  display: block;
+  font-size: 20px;
+  font-weight: 700;
+  color: #141821;
+  line-height: 1.25;
+}
+.kp.hi .kpn {
+  color: #0b6b5e;
+}
+.kp .kpl {
+  font-size: 11px;
+  color: #a8aeb8;
+}
+
+/* ---------- 键值行 ---------- */
+.kv {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  border-bottom: 1px solid #e8eaee;
+  font-size: 13.5px;
+}
+.kv:last-child {
+  border-bottom: 0;
+}
+.kv .k {
+  color: #6b7280;
+  font-size: 12.5px;
+  flex: 0 0 auto;
+}
+.kv .v {
+  text-align: right;
+}
+
+/* ---------- 详情页字段 ---------- */
+.dt {
+  font-size: 19px;
+  font-weight: 700;
+  margin: 2px 2px 3px;
+  line-height: 1.35;
+}
+.dsub {
+  font-size: 12.5px;
+  color: #a8aeb8;
+  margin: 0 2px 14px;
+}
+.field {
+  padding: 12px 14px;
+  border-bottom: 1px solid #e8eaee;
+}
+.field:last-child {
+  border-bottom: 0;
+}
+.field .fk {
+  font-size: 11.5px;
+  font-weight: 600;
+  color: #0b6b5e;
+  letter-spacing: 0.5px;
+  margin-bottom: 5px;
+}
+.field .fv {
+  font-size: 13.5px;
+  line-height: 1.72;
+  color: #2b3138;
+}
+
+/* 长文正文（城市概况 / 园区简介 / 板块介绍共用） */
+.cintro {
+  padding: 12px 14px 14px;
+  font-size: 14px;
+  line-height: 1.75;
+  color: #2b3138;
+}
+
+/* ---------- 涨跌（中国习惯：红涨绿跌） ---------- */
+.up {
+  color: #e03131;
+}
+.down {
+  color: #0ca678;
+}
+.flat {
+  color: #6b7280;
+}
+
+/* ---------- 价量行（参考价页与品类详情共用，必须放全局） ---------- */
+.prow {
+  display: flex;
+  align-items: center;
+  padding: 12px 14px;
+  border-bottom: 1px solid #e8eaee;
+}
+.prow:last-child {
+  border-bottom: 0;
+}
+.prow .pn {
+  flex: 1;
+  font-size: 14.5px;
+  font-weight: 500;
+  min-width: 0;
+}
+.prow .pc {
+  font-style: normal;
+  font-size: 11px;
+  color: #a8aeb8;
+  margin-left: 6px;
+}
+.prow .pp {
+  text-align: right;
+  flex: 0 0 auto;
+}
+.prow .pv {
+  display: block;
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.25;
+}
+.prow .ps {
+  display: block;
+  font-size: 11.5px;
+  line-height: 1.4;
+}
+
+/* ---------- 产业链三段条（品类页与产业链详情共用） ---------- */
+.chainbar {
+  display: flex;
+  padding: 8px 6px;
+  gap: 6px;
+}
+.chain-node {
+  flex: 1;
+  border-radius: 10px;
+  padding: 10px 0;
+  text-align: center;
+}
+.chain-node .cn {
+  font-size: 14px;
+  font-weight: 600;
+}
+.chain-node .cs {
+  font-size: 10.5px;
+  opacity: 0.75;
+  margin-top: 2px;
+}
+.chain-node.on {
+  box-shadow: inset 0 0 0 1.5px currentColor;
+}
+.chain-up {
+  background: #eef4fb;
+  color: #2f6fb0;
+}
+.chain-mid {
+  background: #e7f3f0;
+  color: #0b6b5e;
+}
+.chain-down {
+  background: #fbf3e8;
+  color: #b45309;
+}
+
+/* ---------- 提示 / 空态 / 免责 ---------- */
+.hint {
+  font-size: 11.5px;
+  color: #a8aeb8;
+  line-height: 1.75;
+  padding: 0 14px 12px;
+}
+.empty {
+  padding: 52px 24px;
+  text-align: center;
+  color: #a8aeb8;
+  font-size: 13.5px;
+  line-height: 1.9;
+}
+.disclaimer {
+  font-size: 11px;
+  color: #b6bcc6;
+  line-height: 1.75;
+  padding: 6px 4px 4px;
+}
+
+/* 页脚：主办单位 + ICP 备案号，备案号在小程序内展示是硬性要求 */
+.footer {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 10px 4px calc(14px + env(safe-area-inset-bottom));
+  font-size: 10.5px;
+  color: #c3c8d1;
+  line-height: 1.6;
+}
+.footer .icp {
+  letter-spacing: 0.2px;
+}
+
+/* ---------- 按钮 ---------- */
+.btn {
+  flex: 1;
+  border: 1px solid #e8eaee;
+  background: #fff;
+  border-radius: 10px;
+  padding: 10px 0;
+  font-size: 13.5px;
+  color: #141821;
+  text-align: center;
+  line-height: 1.4;
+}
+.btn.pri {
+  background: #0b6b5e;
+  border-color: #0b6b5e;
+  color: #fff;
+  font-weight: 500;
+}
+.btnrow {
+  display: flex;
+  gap: 9px;
+  padding: 12px 14px;
+}
+
+/* ---------- 地图 ---------- */
+.mapcard {
+  background: #fff;
+  border-radius: 14px;
+  padding: 8px 7px 6px;
+  margin-bottom: 11px;
+  box-shadow: 0 1px 2px rgba(16, 24, 40, 0.045);
+}
+.mapwrap {
+  position: relative;
+  width: 100%;
+  padding-bottom: 64.22%; /* 205.5 / 320，锁死与 viewBox 同比例 */
+}
+.mapimg {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: 100%;
+}
+/* 命中区就地贴在文字上：贴文字比铺满色块更准，也不会出现相邻市重叠抢点击 */
+.hit {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 4px 5px;
+}
+.hit .mn {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.2px;
+  line-height: 1.1;
+  padding: 0 2px;
+  border-radius: 3px;
+}
+.hit .mp {
+  font-size: 7px;
+  font-weight: 500;
+  margin-top: 1px;
+  line-height: 1.1;
+}
+/* 与 web 的 .mlab.u0~u3 / .mpk 同口径 */
+.u0 .mn {
+  color: #6f7a84;
+}
+.u1 .mn {
+  color: #35695d;
+}
+.u2 .mn {
+  color: #0b4539;
+}
+.u3 .mn {
+  color: #ffffff;
+}
+.u0 .mp,
+.u1 .mp {
+  color: #4b7f73;
+}
+.u2 .mp {
+  color: #0b4539;
+}
+.u3 .mp {
+  color: #eaf5f1;
+}
+.plate .mn {
+  background: #fff;
+  border: 0.5px solid #cfdcd9;
+  color: #35695d;
+  font-size: 8.5px;
+}
+
+.mviews {
+  display: flex;
+  gap: 6px;
+  padding: 2px 2px 10px;
+}
+.mvt {
+  flex: 1;
+  border: 1px solid #e8eaee;
+  background: #fff;
+  color: #6b7280;
+  border-radius: 9px;
+  padding: 8px 0;
+  font-size: 13px;
+  text-align: center;
+  line-height: 1.2;
+}
+.mvt.on {
+  background: #e7f3f0;
+  border-color: #0b6b5e;
+  color: #0b6b5e;
+  font-weight: 600;
+}
+
+.legend {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 5px;
+  padding: 8px 6px 4px;
+  font-size: 10.5px;
+  color: #6b7280;
+}
+.legend .lg {
+  color: #a8aeb8;
+  margin-right: 1px;
+}
+.legend .sw {
+  width: 12px;
+  height: 9px;
+  border-radius: 2.5px;
+  border: 0.5px solid rgba(0, 0, 0, 0.06);
+}
+
+/* 信息更正入口条 —— 对应《民法典》1195 条「通知—删除」通道 */
+.fixbar {
+  margin: 12px 14px 4px;
+  padding: 12px 14px;
+  background: #ffffff;
+  border: 0.5px solid #e5e7eb;
+  border-radius: 10px;
+  font-size: 12.5px;
+  line-height: 1.65;
+  color: #6b7280;
+  text-align: center;
+}
+.fixlink {
+  color: #0b6b5e;
+  font-weight: 600;
+  margin-left: 2px;
+}
+
+/* 地图示意性质说明：中国地图公开使用需标注，用于规避"不规范地图"类投诉 */
+.mapnote {
+  padding: 0 6px 8px;
+  font-size: 10.5px;
+  line-height: 1.5;
+  color: #a8aeb8;
+}

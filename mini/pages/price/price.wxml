@@ -1,0 +1,46 @@
+<view class="wrap" wx:if="{{p}}">
+
+  <view class="dt">{{p.name}}</view>
+  <view class="dsub">{{p.ex}} · {{p.group}}</view>
+
+  <view class="card bigpx">
+    <text class="pxv {{p.cls}}">{{p.price}}</text>
+    <text class="chgv {{p.cls}}">{{p.chg}}{{p.amt ? '（' + p.amt + '）' : ''}}</text>
+  </view>
+
+  <view class="card" wx:if="{{hasChart}}">
+    <view class="card-hd">价格走势 <text class="n">{{label}}</text></view>
+    <view class="chartwrap">
+      <canvas type="2d" id="chart" class="chart"></canvas>
+    </view>
+    <view class="periods">
+      <view class="per {{cur === item.d ? 'on' : ''}}" wx:for="{{periods}}" wx:key="d"
+            data-d="{{item.d}}" bindtap="onPeriod">{{item.n}}</view>
+    </view>
+  </view>
+
+  <view class="card" wx:if="{{stats}}">
+    <view class="kv"><text class="k">近 30 日价格变化</text><text class="v {{stats.cls}}">{{stats.chg}}</text></view>
+    <view class="kv"><text class="k">近 30 日最高 / 最低</text><text class="v">{{stats.hi}} / {{stats.lo}}</text></view>
+  </view>
+
+  <view class="card" wx:if="{{!hasChart}}">
+    <view class="empty" style="padding:24px 20px">暂无走势数据</view>
+  </view>
+
+  <view class="card">
+    <view class="btnrow">
+      <view class="btn {{faved ? 'pri' : ''}}" bindtap="onFav">{{faved ? '★ 已收藏' : '☆ 收藏这个品种'}}</view>
+    </view>
+  </view>
+
+  <view class="hint">
+    价格整理自公开商品市场报价，非交易所权威报价，不等于现货成交价。
+    走势图为价格变化趋势，仅用于看方向。
+  </view>
+
+  <view class="disclaimer">{{disclaimer}}</view>
+
+</view>
+
+<view class="empty" wx:else>未找到该品种</view>

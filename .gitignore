@@ -3,3 +3,8 @@ chem-app/backups/
 __pycache__/
 *.pyc
 node_modules/
+# 小程序构建期产物（不是交付物）
+mini/tools/_preview-overlay.png
+mini/tools/preview.html
+mini/tools/_*.png
+.workbuddy/

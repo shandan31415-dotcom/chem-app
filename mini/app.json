@@ -1,0 +1,39 @@
+{
+  "pages": [
+    "pages/parks/parks",
+    "pages/cats/cats",
+    "pages/prices/prices",
+    "pages/policies/policies",
+    "pages/me/me",
+    "pages/city/city",
+    "pages/park/park",
+    "pages/ent/ent",
+    "pages/cat/cat",
+    "pages/board/board",
+    "pages/chain/chain",
+    "pages/price/price",
+    "pages/policy/policy"
+  ],
+  "window": {
+    "backgroundTextStyle": "light",
+    "navigationBarBackgroundColor": "#111827",
+    "navigationBarTitleText": "化工产业地图",
+    "navigationBarTextStyle": "white",
+    "backgroundColor": "#f4f5f7"
+  },
+  "tabBar": {
+    "color": "#6b7280",
+    "selectedColor": "#0b6b5e",
+    "backgroundColor": "#ffffff",
+    "borderStyle": "white",
+    "list": [
+      { "pagePath": "pages/parks/parks", "text": "地图", "iconPath": "assets/tab/map.png", "selectedIconPath": "assets/tab/map-on.png" },
+      { "pagePath": "pages/cats/cats", "text": "品类", "iconPath": "assets/tab/cats.png", "selectedIconPath": "assets/tab/cats-on.png" },
+      { "pagePath": "pages/prices/prices", "text": "参考价", "iconPath": "assets/tab/prices.png", "selectedIconPath": "assets/tab/prices-on.png" },
+      { "pagePath": "pages/policies/policies", "text": "政策", "iconPath": "assets/tab/policies.png", "selectedIconPath": "assets/tab/policies-on.png" },
+      { "pagePath": "pages/me/me", "text": "我的", "iconPath": "assets/tab/me.png", "selectedIconPath": "assets/tab/me-on.png" }
+    ]
+  },
+  "style": "v2",
+  "sitemapLocation": "sitemap.json"
+}

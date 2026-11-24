@@ -1,0 +1,129 @@
+<view class="wrap">
+
+  <!-- 搜索 -->
+  <view class="card searchbox">
+    <view class="sbar">
+      <text class="sic">⌕</text>
+      <input placeholder="搜地市 / 园区 / 企业 / 产品" value="{{q}}" bindinput="onInput" confirm-type="search" />
+      <text class="sx" wx:if="{{q}}" bindtap="clearQ">✕</text>
+    </view>
+    <view class="skw">
+      <view class="chip sm" wx:for="{{kws}}" wx:key="*this" data-k="{{item}}" bindtap="pickKw">{{item}}</view>
+    </view>
+  </view>
+
+  <!-- 搜索结果 -->
+  <block wx:if="{{q}}">
+    <view class="hint" wx:if="{{hits.length}}">
+      匹配到结果{{hitMore ? '，先显示前 40 条，再多输一个字缩小范围' : ''}}
+    </view>
+    <view class="card" wx:if="{{hits.length}}">
+      <view class="row" wx:for="{{hits}}" wx:key="url" data-url="{{item.url}}" bindtap="go">
+        <view class="main">
+          <view class="rt">{{item.n}}<text class="tag he" wx:if="{{item.hi}}">重点</text></view>
+          <view class="rm">
+            <text class="tag cat">{{item.t}}</text>
+            <text>{{item.s}}</text>
+          </view>
+        </view>
+        <text class="arrow">›</text>
+      </view>
+    </view>
+    <view class="card" wx:if="{{!hits.length}}">
+      <view class="empty">没有找到「{{q}}」
+        <view style="font-size:12px;margin-top:6px">试试企业简称（万华、京博）或产品（MDI、烧碱、轮胎）</view>
+      </view>
+    </view>
+  </block>
+
+  <!-- 主内容 -->
+  <block wx:else>
+
+    <view class="mviews">
+      <view class="mvt {{view === item.k ? 'on' : ''}}" wx:for="{{views}}" wx:key="k"
+            data-v="{{item.k}}" bindtap="onView">{{item.n}}</view>
+    </view>
+
+    <view class="mapcard">
+      <view class="mapwrap">
+        <image class="mapimg" src="{{mapImg}}" mode="scaleToFill" />
+        <view wx:for="{{labels}}" wx:key="code"
+              class="hit u{{item.lv}} {{item.plate ? 'plate' : ''}}"
+              style="left:{{item.x}}%;top:{{item.y}}%"
+              data-code="{{item.code}}" bindtap="goCity">
+          <text class="mn">{{item.name}}</text>
+          <text class="mp" wx:if="{{item.parks > 0}}">{{item.parks}}园</text>
+        </view>
+      </view>
+      <view class="legend">
+        <text class="lg">{{legendTitle}}</text>
+        <block wx:for="{{legend}}" wx:key="name">
+          <view class="sw" style="background:{{item.color}}"></view>
+          <text>{{item.name}}</text>
+        </block>
+      </view>
+      <view class="mapnote">{{mapNote}}</view>
+    </view>
+
+    <view class="card kpis">
+      <view class="kp"><text class="kpn">16</text><text class="kpl">地市</text></view>
+      <view class="kp"><text class="kpn">{{totals.parks}}</text><text class="kpl">化工园区</text></view>
+      <view class="kp"><text class="kpn">{{totals.ents}}</text><text class="kpl">收录企业</text></view>
+      <view class="kp hi"><text class="kpn">{{totals.high}}</text><text class="kpl">重点企业</text></view>
+    </view>
+
+    <view class="sec-title">重点企业最集中</view>
+    <view class="card">
+      <view class="row" wx:for="{{topHigh}}" wx:key="code" data-code="{{item.code}}" bindtap="goCity">
+        <view class="main">
+          <view class="rt">{{item.name}}</view>
+          <view class="rm">
+            <text class="tag he">重点 {{item.high}}</text>
+            <text>{{item.parks}} 个园区</text>
+            <text>{{item.ents}} 家企业</text>
+          </view>
+        </view>
+        <text class="arrow">›</text>
+      </view>
+    </view>
+
+    <view class="sec-title">企业收录最多 <text class="subtle">· 点进去看全量</text></view>
+    <view class="card">
+      <view class="row" wx:for="{{topEnt}}" wx:key="code" data-code="{{item.code}}" bindtap="goCity">
+        <view class="main">
+          <view class="rt">{{item.name}}<text class="tag" wx:if="{{item.region}}">{{item.region}}</text></view>
+          <view class="rm">
+            <text>{{item.ents}} 家企业</text>
+            <text>{{item.parks}} 个园区</text>
+            <text class="tag cat" wx:if="{{item.chems}}">{{item.chems}}</text>
+          </view>
+        </view>
+        <text class="arrow">›</text>
+      </view>
+    </view>
+
+    <view class="sec-title">全部 16 个地市</view>
+    <view class="card">
+      <view class="row" wx:for="{{cityRows}}" wx:key="code" data-code="{{item.code}}" bindtap="goCity">
+        <view class="main">
+          <view class="rt">{{item.name}}<text class="tag" wx:if="{{item.region}}">{{item.region}}</text></view>
+          <view class="rm">
+            <text class="tag he">重点 {{item.high}}</text>
+            <text>{{item.parks}} 园区</text>
+            <text>{{item.ents}} 企业</text>
+          </view>
+        </view>
+        <text class="arrow">›</text>
+      </view>
+    </view>
+
+    <view class="hint">
+      点击地图上任意地市，看该市的化工产业定位、园区与代表企业；也可以在顶部搜企业名、园区名或产品（如「MDI」「轮胎」「纯碱」）。
+      颜色深浅＝该市收录的重点企业数量。整理日期：{{dataDate}}
+    </view>
+
+    <view class="disclaimer">{{disclaimer}}</view>
+
+  </block>
+
+</view>

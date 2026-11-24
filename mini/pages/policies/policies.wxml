@@ -1,0 +1,49 @@
+<view class="wrap">
+
+  <view class="card searchbox">
+    <view class="sbar">
+      <text class="sic">⌕</text>
+      <input placeholder="搜政策：标题 / 机关 / 影响" value="{{q}}" bindinput="onInput" confirm-type="search" />
+      <text class="sx" wx:if="{{q}}" bindtap="clearQ">✕</text>
+    </view>
+  </view>
+
+  <block wx:if="{{!q}}">
+    <view class="chips">
+      <view class="chip {{level === item.lv ? 'on' : ''}}" wx:for="{{levels}}" wx:key="lv"
+            data-lv="{{item.lv}}" bindtap="onLevel">{{item.lv}} {{item.count}}</view>
+    </view>
+  </block>
+
+  <view class="sec-title" wx:if="{{q}}">搜索结果 <text class="subtle">· {{resultCount}} 条（含国家级与山东省）</text></view>
+
+  <view class="card" wx:if="{{list.length}}">
+    <view class="row" wx:for="{{list}}" wx:key="id" data-id="{{item.id}}" bindtap="go">
+      <view class="main">
+        <view class="rt">{{item.title}}</view>
+        <view class="rm">
+          <text class="tag">{{item.level}}</text>
+          <text>{{item.org}}</text>
+          <text>{{item.date}}</text>
+          <text class="tag cat" wx:if="{{item.read}}">已读</text>
+        </view>
+      </view>
+      <text class="arrow">›</text>
+    </view>
+  </view>
+
+  <view class="card" wx:if="{{!list.length}}">
+    <view class="empty">没有匹配的政策
+      <view style="font-size:12px;margin-top:6px">{{q ? '换个词试试，比如「环保」「园区」「奖补」' : '这一级暂无收录，政策源还在补充中'}}</view>
+    </view>
+  </view>
+
+  <view class="hint">
+    政策源：山东省工信厅、山东省生态环境厅、国家发改委、生态环境部，共 9 个栏目；后台每日自动采集，新文件只增不删。
+    <text wx:if="{{updatedText}}">　本版数据截至 {{updatedText}}<text wx:if="{{fromCloud}}">（云端已同步）</text>。</text>
+    下拉可手动同步。所有链接均做过回源核验。因微信限制，小程序内不能直接打开政府网站，详情页提供「复制原文链接」。
+  </view>
+
+  <view class="disclaimer">{{disclaimer}}</view>
+
+</view>

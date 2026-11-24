@@ -1,0 +1,68 @@
+<view class="wrap" wx:if="{{e}}">
+
+  <view class="dt">{{e.name}}</view>
+  <view class="dsub">{{e.sub}}</view>
+
+  <view class="hint" style="padding:0 2px 10px" wx:if="{{e.high}}">
+    <text class="tag he">◆ 重点企业</text>
+  </view>
+
+  <view class="card">
+    <view class="field">
+      <view class="fk">主营产品范围</view>
+      <view class="fv">{{e.products}}</view>
+    </view>
+    <view class="field" wx:if="{{e.note}}">
+      <view class="fk">一句话印象</view>
+      <view class="fv">{{e.note}}</view>
+    </view>
+    <view class="field" wx:if="{{e.verify}}">
+      <view class="fk">待核</view>
+      <view class="fv" style="font-size:12.5px;color:#6b7280">这条的园区归属或产品线建议以官方公示核对后再引用</view>
+    </view>
+  </view>
+
+  <block wx:if="{{cats.length}}">
+    <view class="sec-title">所属品类</view>
+    <view class="card">
+      <view class="row" wx:for="{{cats}}" wx:key="id" data-url="/pages/cat/cat?id={{item.id}}" bindtap="go">
+        <view class="main">
+          <view class="rt">{{item.name}}</view>
+          <view class="rm">{{item.one_line}}</view>
+        </view>
+        <text class="arrow">›</text>
+      </view>
+    </view>
+  </block>
+
+  <block wx:if="{{city}}">
+    <view class="sec-title">所属地市</view>
+    <view class="card">
+      <view class="row" data-url="/pages/city/city?code={{city.code}}" bindtap="go">
+        <view class="main">
+          <view class="rt">{{city.name}} · 化工产业</view>
+          <view class="rm">{{city.tagline}}</view>
+        </view>
+        <text class="arrow">›</text>
+      </view>
+    </view>
+  </block>
+
+  <view class="card">
+    <view class="btnrow">
+      <view class="btn {{faved ? 'pri' : ''}}" bindtap="onFav">{{faved ? '★ 已收藏' : '☆ 收藏这家企业'}}</view>
+    </view>
+  </view>
+
+  <view class="hint">
+    企业信息为人工整理，来自政府公示与企业公开资料；未收录联系电话与联系人。
+    不构成合作或采购建议。
+  </view>
+
+  <view class="fixbar" bindtap="onFix">
+    信息有误，或希望撤下本页内容？<text class="fixlink">申请更正 / 删除</text>
+  </view>
+
+</view>
+
+<view class="empty" wx:else>未找到该企业</view>

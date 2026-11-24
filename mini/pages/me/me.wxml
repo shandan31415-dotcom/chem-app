@@ -1,0 +1,63 @@
+<view class="wrap">
+
+  <view class="sec-title">本机记录</view>
+  <view class="card">
+    <view class="kv"><text class="k">已学品类</text><text class="v">{{learned}} / {{learnedTotal}}</text></view>
+    <view class="kv"><text class="k">已读政策</text><text class="v">{{read}} / {{readTotal}}</text></view>
+    <view class="kv"><text class="k">收藏</text><text class="v">{{fav}}</text></view>
+  </view>
+
+  <view class="card">
+    <view class="btnrow">
+      <view class="btn pri" bindtap="onExport">导出我的数据</view>
+      <view class="btn" bindtap="onImport">导入恢复</view>
+    </view>
+    <view class="hint">
+      导出会把 learned / read / fav 三项复制成一段纯文本（json）。换手机或清缓存后复制回来点「导入恢复」即可。
+      导入是<text class="b">合并</text>，不会用旧备份冲掉新记录。
+    </view>
+  </view>
+
+  <view class="card">
+    <view class="btnrow"><view class="btn" bindtap="onClear">清空本机记录</view></view>
+    <view class="hint">只看参考价和政策的话，这些记录不影响任何内容。清空后学习进度归零。</view>
+  </view>
+
+  <view class="sec-title">关于</view>
+  <view class="card">
+    <view class="kv"><text class="k">内容数据</text><text class="v">{{statText}}</text></view>
+    <view class="kv"><text class="k">数据整理日期</text><text class="v">{{dataDate}}</text></view>
+    <view class="kv"><text class="k">小程序版本</text><text class="v">1.0.0</text></view>
+  </view>
+
+  <view class="hint">
+    真正属于你的只有已学 / 已读 / 收藏三项，请定期导出。
+    内容数据（园区、品类、产业链、参考价、政策）会自动更新，不需要备份。
+  </view>
+
+  <view class="sec-title">信息与合规</view>
+  <view class="card">
+    <view class="row" bindtap="onSources">
+      <view class="main">
+        <view class="rt">信息来源说明</view>
+        <view class="rm">园区 / 企业 / 参考价 / 政策 各自的出处</view>
+      </view>
+      <text class="arrow">›</text>
+    </view>
+    <view class="row" bindtap="onFix">
+      <view class="main">
+        <view class="rt">{{fixTitle}}</view>
+        <view class="rm">收录信息来自公开渠道，如有出入可联系处理</view>
+      </view>
+      <text class="arrow">›</text>
+    </view>
+  </view>
+
+  <view class="disclaimer">{{disclaimer}}</view>
+
+  <view class="footer" wx:if="{{holder || icp}}">
+    <text wx:if="{{holder}}">{{holder}}</text>
+    <text wx:if="{{icp}}" class="icp">{{icp}}</text>
+  </view>
+
+</view>

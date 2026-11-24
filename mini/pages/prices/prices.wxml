@@ -1,0 +1,36 @@
+<view class="wrap">
+
+  <view class="card searchbox">
+    <view class="sbar">
+      <text class="sic">⌕</text>
+      <input placeholder="搜品种，如 原油 / PP / 纯碱" value="{{q}}" bindinput="onInput" confirm-type="search" />
+      <text class="sx" wx:if="{{q}}" bindtap="clearQ">✕</text>
+    </view>
+  </view>
+
+  <block wx:for="{{groups}}" wx:key="name" wx:for-item="g">
+    <view class="card">
+      <view class="card-hd">{{g.name}}<text class="n">{{g.count}} 个</text></view>
+      <view class="prow" wx:for="{{g.items}}" wx:key="name" data-name="{{item.name}}" bindtap="go">
+        <view class="pn">{{item.name}}<text class="pc">{{item.code}}</text></view>
+        <view class="pp">
+          <text class="pv {{item.cls}}">{{item.price}}</text>
+          <text class="ps {{item.cls}}">{{item.chg}}</text>
+        </view>
+      </view>
+    </view>
+  </block>
+
+  <view class="card" wx:if="{{!groups.length}}">
+    <view class="empty">没有匹配的品种</view>
+  </view>
+
+  <view class="hint">
+    价格整理自公开商品市场报价，非交易所权威报价，也不等于现货成交价。
+    {{dataDate ? '本次更新于 ' + dataDate + '。' : ''}}
+    数据仅作行业趋势参考。
+  </view>
+
+  <view class="disclaimer">{{disclaimer}}</view>
+
+</view>

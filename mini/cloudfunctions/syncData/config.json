@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "openapi": []
+  },
+  "triggers": [
+    {
+      "name": "dailySync",
+      "type": "timer",
+      "config": "0 30 6 * * * *"
+    }
+  ]
+}

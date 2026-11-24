@@ -53,11 +53,18 @@ jobs:
       - name: 抓取数据
         run: python scripts/fetch_all.py
 
+      # 重建小程序数据 + 云端快照（chem-app/data/cloud_snapshot.json）。
+      # 云函数 syncData 每天从 Pages 拉这份快照灌进云数据库，所以必须跟着数据一起更新。
+      # 这一步失败就让任务红叉——数据构建不过关，宁可不上线也别发一份坏数据。
+      - name: 重建小程序数据与云端快照
+        working-directory: .
+        run: python mini/scripts/build_data.py
+
       - name: 提交数据
         run: |
           git config user.name "chem-data-bot"
           git config user.email "chem-data-bot@users.noreply.github.com"
-          git add data
+          git add data ../mini/data
           if git diff --cached --quiet; then
             echo "NO_CHANGE=true" >> $GITHUB_ENV
             echo "今天没有新数据，跳过提交"

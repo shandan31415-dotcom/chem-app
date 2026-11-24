@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """问题2 · 地图全量展示 84 家化工园区 验收测试
 
-需求：地图模块全量展示 84 个化工园区（原 85 家中「高密仁和化工产业园」已取消资格，按 84 家计），
+需求：地图模块全量展示 84 个化工园区（认定 85 家中「高密仁和化工产业园」2025 年 6 月起资格暂停，按 84 家在营园区计），
 及园区里的全部企业（现有企业保留，新增园区暂无企业时明确标注「名录整理中」，不做编造）。
 """
 import json
@@ -43,9 +43,9 @@ class TestParks84Data(unittest.TestCase):
         self.assertEqual([], dups, "园区重名：" + "、".join(dups))
 
     def test_gaomi_renhe_excluded(self):
-        """高密仁和化工产业园已取消资格，不得出现"""
+        """高密仁和化工产业园资格暂停，不计入在营园区"""
         names = [p["name"] for c in self.d["cities"] for p in c["parks"]]
-        self.assertNotIn("高密仁和化工产业园", names, "高密仁和已被取消资格，不应收录")
+        self.assertNotIn("高密仁和化工产业园", names, "高密仁和资格暂停，不应计入在营园区")
 
     def test_level_values_valid(self):
         """等级只能是三档"""

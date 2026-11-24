@@ -1,0 +1,9 @@
+{
+  "name": "syncData",
+  "version": "1.0.0",
+  "description": "每天把 GitHub 上的数据快照灌进云数据库 snapshot/latest",
+  "main": "index.js",
+  "dependencies": {
+    "wx-server-sdk": "~2.6.3"
+  }
+}
