@@ -405,6 +405,46 @@ def fetch_kline(secid, lmt=250):
     return out[-lmt:]
 
 
+def fetch_kline_sina(symbol, lmt=250):
+    """新浪日 K 兜底（symbol 形如 SC0，即 SINA_CODE 去掉 nf_ 前缀）。
+
+    返回字段：d 日期 o 开 h 高 l 低 c 收 v 量。这里转成与东财一致的
+    [日期, 开, 收, 高, 低, 量]，上层不用区分数据来自哪个源。
+    """
+    u = ("https://stock2.finance.sina.com.cn/futures/api/jsonp.php/var%20_x=/"
+         "InnerFuturesNewService.getDailyKLine?symbol=" + symbol)
+    text = http_get(u, referer="https://finance.sina.com.cn", timeout=20,
+                    retries=1).decode("utf-8", "ignore")
+    a, b = text.find("("), text.rfind(")")
+    if a < 0 or b < a:
+        return []
+    arr = json.loads(text[a + 1:b])
+    out = []
+    for x in arr:
+        try:
+            out.append([x["d"], round(float(x["o"]), 1), round(float(x["c"]), 1),
+                        round(float(x["h"]), 1), round(float(x["l"]), 1),
+                        int(float(x["v"]))])
+        except Exception:  # noqa: BLE001
+            continue
+    return out[-lmt:]
+
+
+def fetch_kline_any(row, lmt=250):
+    """先东财（secid 有值才试），失败再走新浪主连代码。"""
+    if row.get("secid"):
+        try:
+            k = fetch_kline(row["secid"], lmt)
+            if k:
+                return k
+        except Exception:  # noqa: BLE001
+            pass
+    sc = SINA_CODE.get(row["name"])
+    if sc:
+        return fetch_kline_sina(sc[0][3:], lmt)
+    return []
+
+
 # ---------------------------------------------------------------- 资讯
 # 高端化工关键词（宽泛不漏算）
 KW_CATEGORY = [
@@ -1453,10 +1493,8 @@ def main():
         hist = load("prices_history.json", {"series": {}})
         series = hist.get("series", {}) if isinstance(hist, dict) else {}
         for r in rows:
-            if not r.get("secid"):
-                continue
             try:
-                k = fetch_kline(r["secid"], 250)
+                k = fetch_kline_any(r, 250)
                 if k:
                     series[r["name"]] = k
             except Exception as e:  # noqa: BLE001
