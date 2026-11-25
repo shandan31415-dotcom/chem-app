@@ -1,12 +1,12 @@
 {
  "schema": 1,
  "meta": {
-  "updated_at": 1795629952,
-  "updated_at_text": "2026-11-25 18:05"
+  "updated_at": 1795649365,
+  "updated_at_text": "2026-11-25 23:29"
  },
  "policies": {
-  "updated_at": 1795629952,
-  "updated_at_text": "2026-11-25 18:05",
+  "updated_at": 1795649365,
+  "updated_at_text": "2026-11-25 23:29",
   "items": [
    {
     "id": "pol1",
@@ -611,8 +611,8 @@
   ]
  },
  "prices": {
-  "updated_at": 1795629952,
-  "updated_at_text": "2026-11-25 18:05",
+  "updated_at": 1795649365,
+  "updated_at_text": "2026-11-25 23:29",
   "count": 24,
   "groups": [
    {
@@ -623,9 +623,9 @@
       "group": "原油与油品",
       "code": "sc0",
       "ex": "上期能源",
-      "price": 591.9,
-      "chg": 2.42,
-      "chg_amt": 14.0
+      "price": 589.5,
+      "chg": 2.01,
+      "chg_amt": 11.6
      },
      {
       "name": "燃料油",
