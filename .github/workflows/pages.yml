@@ -2,6 +2,9 @@
 # 不用动 Settings 里的分支/目录选择，也不用把 App 挪到仓库根）
 #
 # 首次使用：仓库 Settings → Pages → Build and deployment → Source 选 "GitHub Actions"。
+#
+# 注：deploy-pages 偶发 "Deployment failed, try again later"，多为 Pages 服务端瞬时
+# 错误或并发部署冲突。重跑一次即可，不影响数据（数据在仓库里，站点只是快照）。
 
 name: pages
 
