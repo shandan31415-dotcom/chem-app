@@ -260,7 +260,69 @@ def get_quote(url, referer="https://quote.eastmoney.com/", timeout=25):
         raise
 
 
-def fetch_prices():
+# 新浪期货主力连续代码：东财品种代码去掉末尾的 "m"（主连标记）再转大写。
+# 东财 push2 对境外出口 IP（GitHub Actions 用的就是）会直接断连，行情曾经
+# 因此连续多日停在旧价——数据看着正常，其实早就不动了。所以必须有第二源。
+SINA_CODE = {
+    "原油": ("nf_SC0", "上期能源"), "燃料油": ("nf_FU0", "上期所"),
+    "低硫燃料油": ("nf_LU0", "上期能源"),
+    "液化石油气": ("nf_PG0", "大商所"), "沥青": ("nf_BU0", "上期所"),
+    "聚乙烯": ("nf_L0", "大商所"), "聚丙烯": ("nf_PP0", "大商所"),
+    "PVC": ("nf_V0", "大商所"), "苯乙烯": ("nf_EB0", "大商所"),
+    "烧碱": ("nf_SH0", "郑商所"), "对二甲苯": ("nf_PX0", "郑商所"),
+    "PTA": ("nf_TA0", "郑商所"), "乙二醇": ("nf_EG0", "大商所"),
+    "短纤": ("nf_PF0", "郑商所"), "瓶片": ("nf_PR0", "郑商所"),
+    "甲醇": ("nf_MA0", "郑商所"), "尿素": ("nf_UR0", "郑商所"),
+    "纯碱": ("nf_SA0", "郑商所"), "玻璃": ("nf_FG0", "郑商所"),
+    "焦炭": ("nf_J0", "大商所"), "焦煤": ("nf_JM0", "大商所"),
+    "天然橡胶": ("nf_RU0", "上期所"), "20号胶": ("nf_NR0", "上期能源"),
+    "纸浆": ("nf_SP0", "上期所"),
+}
+
+
+def fetch_prices_sina():
+    """东财不可用时的兜底行情源（新浪）。
+
+    字段（逗号分隔，0 起）：0 名称 1 时间 2 开 3 高 4 低 5 - 6 买 7 卖
+    8 最新价 9 结算 10 昨结算 …… 17 日期。涨跌幅按「最新 vs 昨结算」算，
+    与国内期货软件的显示口径一致。
+    """
+    name_by_code = dict((v[0], k) for k, v in SINA_CODE.items())
+    codes = [v[0] for k, v in SINA_CODE.items() if k in dict(PRODUCTS)]
+    grp_map = dict(PRODUCTS)
+    rows = []
+    for i in range(0, len(codes), 8):
+        batch = codes[i:i + 8]
+        raw = http_get("https://hq.sinajs.cn/list=" + ",".join(batch),
+                       referer="https://finance.sina.com.cn", timeout=15, retries=1)
+        text = raw.decode("gbk", "ignore")
+        for line in text.split(";"):
+            if '"' not in line:
+                continue
+            key = line.split("hq_str_")[-1].split("=")[0].strip()
+            f = line.split('"')[1].split(",")
+            if len(f) < 11:
+                continue
+            try:
+                price = float(f[8] or 0)
+                presettle = float(f[10] or 0)
+            except ValueError:
+                continue
+            name = name_by_code.get(key)
+            if not name or price <= 0:
+                continue
+            chg = round((price - presettle) / presettle * 100, 2) if presettle > 0 else None
+            rows.append({
+                "name": name, "group": grp_map[name],
+                "code": key[3:].lower(), "secid": "",
+                "ex": SINA_CODE[name][1], "price": price, "chg": chg,
+                "chg_amt": round(price - presettle, 2) if presettle > 0 else None,
+            })
+    return rows
+
+
+def fetch_prices_em():
+    """东财主源：一次拉全市场主力合约，字段最全（带 secid 可用于拉 K 线）。"""
     items = []
     for mk, ex in MARKETS.items():
         for pn in range(1, 8):
@@ -303,6 +365,25 @@ def fetch_prices():
             "chg": hit.get("f3") if isinstance(hit.get("f3"), (int, float)) else None,
             "chg_amt": hit.get("f4") if isinstance(hit.get("f4"), (int, float)) else None,
         })
+    return rows
+
+
+def fetch_prices():
+    """主源东财，取不到就回落新浪——宁可少几个字段，也不能让价格停更。"""
+    rows = []
+    try:
+        rows = fetch_prices_em()
+    except Exception as e:  # noqa: BLE001
+        print("  [!] 东财行情失败: %s" % str(e)[:60])
+    if len(rows) >= 15:
+        return rows
+    try:
+        alt = fetch_prices_sina()
+        print("     新浪兜底行情 %d 条（东财 %d 条）" % (len(alt), len(rows)))
+        if len(alt) > len(rows):
+            return alt
+    except Exception as e:  # noqa: BLE001
+        print("  [!] 新浪行情也失败: %s" % str(e)[:60])
     return rows
 
 
@@ -1372,6 +1453,8 @@ def main():
         hist = load("prices_history.json", {"series": {}})
         series = hist.get("series", {}) if isinstance(hist, dict) else {}
         for r in rows:
+            if not r.get("secid"):
+                continue
             try:
                 k = fetch_kline(r["secid"], 250)
                 if k:

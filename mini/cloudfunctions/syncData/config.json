@@ -4,9 +4,19 @@
   },
   "triggers": [
     {
-      "name": "dailySync",
+      "name": "syncMorning",
       "type": "timer",
-      "config": "0 30 6 * * * *"
+      "config": "0 10 10 * * * *"
+    },
+    {
+      "name": "syncAfternoon",
+      "type": "timer",
+      "config": "0 10 16 * * * *"
+    },
+    {
+      "name": "syncNight",
+      "type": "timer",
+      "config": "0 50 23 * * * *"
     }
   ]
 }
