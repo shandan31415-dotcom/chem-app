@@ -1,5 +1,6 @@
 const core = require('../../utils/core.js');
 const cfg = require('../../utils/config.js');
+const live = require('../../utils/live.js');
 
 const VIEWS = [
   { k: 'heat', n: '重点企业热力' },
@@ -37,6 +38,12 @@ Page({
 
   onLoad() {
     this.paint();
+    // 名录现在从云库来，可能在页面已经画完之后才到——订阅一次，到了就重绘
+    this._off = live.onUpdate(() => this.paint());
+  },
+
+  onUnload() {
+    if (this._off) this._off();
   },
 
   onShow() {

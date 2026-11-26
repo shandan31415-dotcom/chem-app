@@ -105,6 +105,31 @@ def dump_cloud(policies, prices, meta):
     return os.path.getsize(path), len(snap["policies"]["items"])
 
 
+def dump_catalog(parks):
+    """企业与园区名录的云端副本，落到 chem-app/data/catalog.json。
+
+    这两样原来只存在于代码包里——加一家会员企业、改一个园区的主导产业，
+    都得改代码重新发版。现在额外生成一份，云函数把它灌进云数据库的
+    catalog 集合，小程序优先读云库。
+
+    协会在云开发控制台的「数据库 → catalog → latest」里直接改 cities 里的
+    JSON，改完小程序下拉刷新就能看到，不用发版、不用找开发。
+
+    只放名录本身（cities 及其下的 parks / enterprises）和计数，
+    不放 note 那段长说明，少推几十 KB。
+    """
+    doc = {
+        "updated_at": parks.get("updated_at"),
+        "updated_at_text": parks.get("updated_at_text", ""),
+        "counts": parks.get("counts", {}),
+        "cities": parks.get("cities", []),
+    }
+    path = os.path.join(SRC, "catalog.json")
+    with open(path, "w", encoding="utf-8", newline="\n") as f:
+        json.dump(doc, f, ensure_ascii=False, separators=(",", ":"))
+    return os.path.getsize(path), len(doc["cities"])
+
+
 def build_mapmeta(sd):
     """把 label 坐标换算成百分比，供 WXML 绝对定位叠字用（图里不烧字）。"""
     m = re.match(r"\s*0\s+0\s+([\d.]+)\s+([\d.]+)", sd.get("viewBox", "0 0 320 205.5"))
@@ -171,6 +196,10 @@ def main():
     cloud_size, cloud_pol = dump_cloud(policies, prices, meta)
     print("  云端快照     %7.1f KB  （%d 条政策，供云函数同步）"
           % (cloud_size / 1024.0, cloud_pol))
+
+    cat_size, cat_cities = dump_catalog(parks)
+    print("  云端名录     %7.1f KB  （%d 个地市的企业与园区，云库可改，改完不用发版）"
+          % (cat_size / 1024.0, cat_cities))
 
     # 自检：行情必须已剥离 news
     leaked = [it["name"] for g in prices["groups"] for it in g["items"] if "news" in it]

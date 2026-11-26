@@ -6,16 +6,18 @@
  * 这个脚本能在本机 10 秒内验证同一套逻辑。
  *
  * 跑法：
- *   node mini/tools/test_sync.js                 # 正常路径
- *   PRICE_STALE_SEC=0 node mini/tools/test_sync.js   # 强制走行情直抓
- *   MOCK_OFFLINE=1 node mini/tools/test_sync.js      # 模拟 GitHub 全挂，验证降级
- *   CLOUD_NEWER=1 node mini/tools/test_sync.js       # 模拟远程命中 CDN 缓存（比云库旧）
+ *   node mini/tools/test_sync.js                 # 正常路径（真抓 11 个政府栏目 + 新浪行情）
+ *   MOCK_EMPTY=1 node mini/tools/test_sync.js        # 云库空，走 GitHub 冷启动
+ *   MOCK_OFFLINE=1 node mini/tools/test_sync.js      # GitHub 全挂（验证冷启动失败）
+ *   MOCK_POLICY_DOWN=1 node mini/tools/test_sync.js  # 政府站全挂，政策沿用云库
  */
 const path = require('path');
 const fs = require('fs');
 const Module = require('module');
 
 const OFFLINE = process.env.MOCK_OFFLINE === '1';
+const EMPTY = process.env.MOCK_EMPTY === '1';
+const POLICY_DOWN = process.env.MOCK_POLICY_DOWN === '1';
 const ROOT = path.join(__dirname, '..');
 
 // GitHub 侧全挂时，云库里应当还躺着一份旧快照——这里用仓库里现成的快照文件充当
@@ -32,6 +34,7 @@ if (process.env.CLOUD_NEWER === '1' && cloudSnap.meta) {
 }
 
 let written = null;
+const writtenAll = {};
 let logged = [];
 
 const dbMock = {
@@ -39,8 +42,14 @@ const dbMock = {
     doc: () => ({
       set: async ({ data }) => {
         written = { name, data };
+        writtenAll[name] = data;
       },
-      get: async () => ({ data: { payload: cloudSnap } }),
+      get: async () => {
+        // 名录集合初始为空，走「首次写入」分支
+        if (name === 'catalog') throw new Error('document does not exist');
+        if (EMPTY) throw new Error('document does not exist');
+        return { data: { payload: cloudSnap } };
+      },
     }),
     add: async ({ data }) => {
       logged.push(data);
@@ -58,21 +67,32 @@ Module._load = function (req, parent, isMain) {
   return load.call(this, req, parent, isMain);
 };
 
-if (OFFLINE) {
-  // 只掐 GitHub 系域名，新浪照常放行——要验证的正是「快照挂了行情还能续」
+if (OFFLINE || POLICY_DOWN) {
+  // 掐掉指定域名，模拟「这条腿断了」。新浪放行时要验证的正是另一半还能不能续上。
   const https = require('https');
-  const origGet = https.get;
+  const http = require('http');
+  const origHttps = https.get;
+  const origHttp = http.get;
   const { PassThrough } = require('stream');
-  https.get = function (url) {
-    if (typeof url === 'string' && /github|jsdelivr|ghfast|gh-proxy/.test(url)) {
+  const githubRe = /github|jsdelivr|ghfast|gh-proxy/;
+  const govRe = /shandong\.gov\.cn|ndrc\.gov\.cn|mee\.gov\.cn|miit\.gov\.cn|sdein\.gov\.cn/;
+
+  const make = (orig, hit) => function (url) {
+    if (typeof url === 'string' && hit.test(url)) {
       const req = new PassThrough();
       req.setTimeout = () => req;
       req.destroy = () => {};
-      process.nextTick(() => req.emit('error', new Error('mock: github unreachable')));
+      process.nextTick(() => req.emit('error', new Error('mock: unreachable')));
       return req;
     }
-    return origGet.apply(this, arguments);
+    return orig.apply(this, arguments);
   };
+
+  if (OFFLINE) https.get = make(origHttps, githubRe);
+  if (POLICY_DOWN) {
+    https.get = make(https.get, govRe);
+    http.get = make(origHttp, govRe);
+  }
 }
 
 const fn = require(path.join(ROOT, 'cloudfunctions', 'syncData', 'index.js'));
@@ -92,6 +112,13 @@ fn.main()
     );
     const it = p.groups[0].items[0];
     console.log('样例：%s %s %s%% src=%s', it.name, it.price, it.chg, it.src);
+    if (writtenAll.catalog) {
+      const cat = writtenAll.catalog;
+      console.log('名录落库：%d 个地市 | 园区 %d | 企业 %d | 日期 %s',
+        cat.city_count, cat.park_count, cat.company_count, cat.data_date);
+    } else {
+      console.log('名录未落库（云库已有新版或拉取失败）');
+    }
     if (logged.length) console.log('日志：', JSON.stringify(logged));
     process.exit(0);
   })

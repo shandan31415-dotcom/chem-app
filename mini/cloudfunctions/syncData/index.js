@@ -1,24 +1,28 @@
 /**
- * 云函数 syncData —— 把最新数据快照灌进云数据库，并在快照行情过期时自己去抓。
+ * 云函数 syncData —— 政策与行情都由它自己在国内机房抓，抓完写云数据库。
  *
- * 为什么绕这一圈：小程序端不能随便请求外部域名（要在后台配合法域名），
- * GitHub 在国内也不稳定。云函数跑在腾讯云里，由它去取，小程序只读云数据库，
- * 一次配置，之后不用管。
+ * 架构在 2026-11-26 改过一轮。原来是把 GitHub Actions 采集好的快照搬进来，
+ * 问题是那条链三处都在境外：采集在美国机器上跑（连不上东财、连国内政府站也慢），
+ * 数据存在 GitHub Pages 上，云函数再去取。任何一处抽风，小程序就停更。
+ *
+ * 现在：
+ *   政策 → crawlPolicies() 直接抓 11 个政府栏目，解析、判定、与库里的历史合并
+ *   行情 → fetchSinaPrices() 直接抓新浪期货主力连续
+ *   两者互不依赖，并行执行，典型 1~2 秒跑完
+ *
+ * GitHub 只剩一个用途：云库为空时（首次部署或集合被误删），从备份快照里借一次底子。
+ * 日常运行完全不经过它——断网也不影响小程序。
  *
  * 部署：微信开发者工具 → 右键 cloudfunctions/syncData → 「上传并部署：云端安装依赖」
  * 触发器：见同目录 config.json（每天 10:10 / 16:10 / 23:50），改完要在开发者工具里
  *        右键云函数「上传触发器」，只传代码不会更新定时。
  *
- * 两条腿走路：
- *   1) 政策 + 静态数据 → 拉 GitHub 上的快照（raw / Pages / jsDelivr / 加速代理，并发竞速）
- *   2) 行情 → 发现快照里的价格超过 6 小时没动，就自己找新浪抓一次覆盖掉。
- *      东方财富对 GitHub Actions 的境外 IP 是直接断连的，行情曾经因此停更数天。
- *
- * 全部失败时**不动云库**，保留上一次成功的快照，小程序照样能读。
+ * 全部失败时**不动云库**，保留上一次成功的数据，小程序照样能读。
  */
 const cloud = require('wx-server-sdk');
 const https = require('https');
 const zlib = require('zlib');
+const { crawlPolicies } = require('./policies');
 
 cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV });
 const db = cloud.database();
@@ -30,6 +34,7 @@ const FILE = 'chem-app/data/cloud_snapshot.json';
 const COLLECTION = 'snapshot';
 const DOC_ID = 'latest';
 const LOG_COLLECTION = 'sync_log';
+const CATALOG_COLLECTION = 'catalog';
 
 /**
  * 取数通道。**全部并发发起，谁先成功用谁**——串行试是上一版超时的根因：
@@ -50,12 +55,6 @@ const RAW = 'https://raw.githubusercontent.com/' + REPO + '/' + BRANCH + '/' + F
  * 全挂了才退到 CDN 档，并把它标成 stale。
  */
 const SOURCES_FRESH = [
-  {
-    // 自家 Pages，daily.yml 提交后会重新部署；CDN 缓存约 10 分钟量级
-    name: 'github-pages',
-    url: 'https://shandan31415-dotcom.github.io/chem-app/data/cloud_snapshot.json',
-    timeout: 5000,
-  },
   // 代理只做透明转发，不缓存内容
   { name: 'gh-proxy', url: 'https://gh-proxy.com/' + RAW, timeout: 5000 },
   { name: 'ghfast', url: 'https://ghfast.top/' + RAW, timeout: 5000 },
@@ -290,78 +289,217 @@ function stampOf(snap) {
   return (snap && snap.meta && snap.meta.updated_at_text) || '';
 }
 
-exports.main = async () => {
-  const startedAt = Date.now();
-  const cloudSnap = await loadCloudSnap();
+/** 降级留痕：接口照样返回 ok，但政策或价格已经停更了，翻 sync_log 能看出来 */
+async function logDegraded(payload) {
+  try {
+    await ensureCollection(LOG_COLLECTION);
+    await db.collection(LOG_COLLECTION).add({
+      data: Object.assign({ at: new Date(), ok: false, degraded: true }, payload),
+    });
+  } catch (e) {
+    console.error('写降级日志失败', e);
+  }
+}
 
-  let hit = null;
-  let errs = [];
+/** 冷启动：云库为空时，从 GitHub 的备份里借一份历史底子 */
+async function bootstrapFromGithub() {
+  const errs = [];
   for (const group of [SOURCES_FRESH, SOURCES_CDN]) {
     try {
-      hit = await raceOk(group);
-      break;
+      const hit = await raceOk(group);
+      return { hit: hit, errs: errs };
     } catch (errors) {
-      errs = errs.concat(Array.isArray(errors) ? errors : [String(errors)]);
+      errs.push.apply(errs, Array.isArray(errors) ? errors : [String(errors)]);
     }
   }
+  return { hit: null, errs: errs };
+}
 
-  let snap;
-  let srcName;
-  let srcUrl = '';
-  let stale = false;
-  if (hit) {
-    snap = hit.snap;
-    srcName = hit.source;
-    srcUrl = hit.url;
-    // 远程比云库还旧，说明命中了 CDN 缓存，或者 Pages 还没部署完。
-    // 云库那份是上一轮写进去的，用云库，别把旧数据当新的又写一遍。
-    if (cloudSnap && stampOf(hit.snap) && stampOf(hit.snap) < stampOf(cloudSnap)) {
-      errs.push(
-        hit.source + ' 内容滞后（' + stampOf(hit.snap) + ' < 云库 ' + stampOf(cloudSnap) + '），改用云库'
-      );
-      snap = cloudSnap;
-      srcName = 'cloud-cache';
-      stale = true;
+/**
+ * 企业与园区名录（catalog）。
+ *
+ * 这份数据更新频率以「月」计，和每天变的政策不是一回事，所以单独一个集合。
+ * 同步策略：只有 GitHub 上那份比云库新才覆盖。协会在云开发控制台的
+ * 数据库里手改过之后，云库的 updated_at 会变成修改时间，一般情况下
+ * 就不会再被旧备份盖回去——除非有人在仓库里改了名录并更新了 updated_at。
+ *
+ * 三条链路全挂就跳过，不影响政策与行情的同步。
+ */
+const CATALOG_URL = 'https://raw.githubusercontent.com/' + REPO + '/' + BRANCH +
+  '/chem-app/data/catalog.json';
+
+function pullCatalogOnce(timeout) {
+  const urls = [
+    'https://gh-proxy.com/' + CATALOG_URL,
+    'https://ghfast.top/' + CATALOG_URL,
+    CATALOG_URL,
+  ];
+  return new Promise((resolve) => {
+    let done = false;
+    const finish = (v) => {
+      if (!done) {
+        done = true;
+        resolve(v);
+      }
+    };
+    urls.forEach((u) => {
+      getText(u, timeout)
+        .then((t) => {
+          const d = JSON.parse(t);
+          if (d && Array.isArray(d.cities) && d.cities.length >= 5) finish(d);
+        })
+        .catch(() => {});
+    });
+    setTimeout(() => finish(null), timeout + 500);
+  });
+}
+
+async function syncCatalog() {
+  let cur = null;
+  let curDoc = null;
+  try {
+    const r = await db.collection(CATALOG_COLLECTION).doc(DOC_ID).get();
+    curDoc = (r && r.data) || null;
+    cur = curDoc && curDoc.payload;
+  } catch (e) {
+    cur = null;
+  }
+
+  // 名录以月为单位变化，没必要每次触发都去 GitHub 问一遍。
+  // 12 小时内查过就跳过——省下的是云函数每次 3 秒的等待。
+  const checked = curDoc && curDoc.checked_at ? new Date(curDoc.checked_at).getTime() : 0;
+  if (checked && Date.now() - checked < 12 * 3600 * 1000) {
+    return { ok: true, note: '今日已检查' };
+  }
+
+  const remote = await pullCatalogOnce(3000);
+  if (!remote) {
+    // 记下检查时间，免得每次触发都白等 3 秒
+    try {
+      await db.collection(CATALOG_COLLECTION).doc(DOC_ID)
+        .update({ data: { checked_at: new Date() } });
+    } catch (e) { /* 集合都不存在就没什么可记的 */ }
+    return { ok: false, note: '拉取失败，沿用云库' };
+  }
+
+  const remoteTs = Number(remote.updated_at || 0);
+  const curTs = Number((cur && cur.updated_at) || 0);
+  if (cur && remoteTs && remoteTs <= curTs) {
+    try {
+      await db.collection(CATALOG_COLLECTION).doc(DOC_ID)
+        .update({ data: { checked_at: new Date() } });
+    } catch (e) { /* 同上 */ }
+    return { ok: true, note: '云库已是新版', cities: (cur.cities || []).length };
+  }
+
+  const doc = {
+    payload: remote,
+    synced_at: new Date(),
+    checked_at: new Date(),
+    city_count: remote.cities.length,
+    park_count: (remote.counts && remote.counts.parks) || 0,
+    company_count: (remote.counts && remote.counts.companies) || 0,
+    data_date: remote.updated_at_text || '',
+  };
+  try {
+    await db.collection(CATALOG_COLLECTION).doc(DOC_ID).set({ data: doc });
+  } catch (e) {
+    await ensureCollection(CATALOG_COLLECTION);
+    await db.collection(CATALOG_COLLECTION).doc(DOC_ID).set({ data: doc });
+  }
+  return { ok: true, note: cur ? '已更新' : '首次写入', cities: remote.cities.length };
+}
+
+exports.main = async () => {
+  const startedAt = Date.now();
+  const notes = [];
+
+  let cloud = await loadCloudSnap();
+
+  // 日常运行完全不碰 GitHub：政策由下面的 crawlPolicies 在国内机房直接抓。
+  // 这里只在云库为空时（首次部署、或集合被误删）去借一次历史数据。
+  if (!cloud) {
+    const boot = await bootstrapFromGithub();
+    if (!boot.hit) {
+      await logDegraded({ errors: boot.errs, reason: '冷启动失败：云库空且 GitHub 不可用',
+        ms: Date.now() - startedAt });
+      return { ok: false, errors: boot.errs, ms: Date.now() - startedAt };
     }
-  } else if (cloudSnap) {
-    // GitHub 那条链断了≠整个应用停摆：云库里还有一份昨天的快照，
-    // 政策旧几天没关系，价格继续由我们自己去抓，用户看到的仍是最新价。
-    snap = cloudSnap;
-    srcName = 'cloud-cache';
-    stale = true;
+    cloud = boot.hit.snap;
+    notes.push('冷启动取数：' + boot.hit.source);
+  }
+
+  const existing = (cloud.policies && cloud.policies.items) || [];
+
+  // 政策与行情互不依赖，并行抓。串行白等一倍时间，而云函数总共只有 20 秒。
+  const [pol, px] = await Promise.all([
+    crawlPolicies(existing).then((v) => ({ ok: true, v: v })).catch((e) => ({ ok: false, e: e })),
+    fetchSinaPrices().then((v) => ({ ok: true, v: v })).catch((e) => ({ ok: false, e: e })),
+  ]);
+
+  const now = new Date();
+  const nowTs = Math.floor(now.getTime() / 1000);
+  const snap = JSON.parse(JSON.stringify(cloud));
+
+  /* ---------------------------------------------------------------- 政策 */
+  let policyNote = '';
+  let policyAdded = 0;
+  let policySrcOk = 0;
+  let policySrcAll = 0;
+  if (pol.ok && pol.v.items.length >= 5) {
+    snap.policies = {
+      updated_at: nowTs,
+      updated_at_text: beijingStamp(now),
+      items: pol.v.items,
+    };
+    policyAdded = pol.v.added;
+    policySrcAll = pol.v.sources.length;
+    policySrcOk = pol.v.sources.filter((s) => s.ok).length;
+    policyNote = policySrcOk === 0 ? '全部源失败，沿用云库' : 'crawl';
+    const failed = pol.v.sources.filter((s) => !s.ok).map((s) => s.org);
+    if (failed.length) notes.push('政策源失败：' + failed.join('、'));
   } else {
-    try {
-      await ensureCollection(LOG_COLLECTION);
-      await db.collection(LOG_COLLECTION).add({
-        data: { at: new Date(), ok: false, errors: errs, ms: Date.now() - startedAt },
-      });
-    } catch (e) {
-      console.error('写日志失败', e);
-    }
-    return { ok: false, errors: errs, ms: Date.now() - startedAt };
+    policyNote = pol.ok
+      ? '条数异常，沿用云库'
+      : '抓取异常：' + String((pol.e && pol.e.message) || pol.e).slice(0, 80);
+    notes.push('政策未更新：' + policyNote);
   }
 
-  // 快照里的行情是 GitHub 那边采的。它一旦因为境外 IP 被拦就会停更，
-  // 而快照本身照旧写得进来——所以这里要单独判一次「价格还新鲜吗」。
+  /* ---------------------------------------------------------------- 行情 */
   let priceHit = 0;
-  let priceNote = 'fresh';
-  if (pricesStale(snap)) {
-    try {
-      const { quotes, stamp } = await fetchSinaPrices();
-      priceHit = applyPrices(snap, quotes, stamp);
-      priceNote = priceHit > 0 ? 'refreshed-sina' : 'sina-empty';
-    } catch (e) {
-      priceNote = 'sina-fail: ' + String((e && e.message) || e).slice(0, 80);
-      console.warn('行情直连失败，沿用快照里的价格', priceNote);
-    }
+  let priceNote = '';
+  if (px.ok) {
+    priceHit = applyPrices(snap, px.v.quotes, px.v.stamp);
+    priceNote = priceHit > 0 ? 'sina' : 'sina-empty';
+  } else {
+    priceNote = 'sina-fail: ' + String((px.e && px.e.message) || px.e).slice(0, 80);
+    notes.push('行情未更新：' + priceNote);
+  }
+
+  /* ------------------------------------------------------- 数据日期 = 较晚者 */
+  const cands = [
+    [snap.policies.updated_at || 0, snap.policies.updated_at_text || ''],
+    [(snap.prices && snap.prices.updated_at) || 0, (snap.prices && snap.prices.updated_at_text) || ''],
+  ].sort((a, b) => b[0] - a[0]);
+  snap.meta = {
+    updated_at: cands[0][0] || nowTs,
+    updated_at_text: cands[0][1] || beijingStamp(now),
+  };
+
+  // 结构不对宁可不写：库里放着一份坏数据，小程序会一直读到它
+  try {
+    check(snap);
+  } catch (e) {
+    await logDegraded({ errors: [String(e.message)], reason: '快照校验未通过', ms: Date.now() - startedAt });
+    return { ok: false, errors: [String(e.message)], ms: Date.now() - startedAt };
   }
 
   const doc = {
     payload: snap,
-    synced_at: new Date(),
-    source_url: srcUrl,
-    source_name: srcName,
+    synced_at: now,
+    mode: 'local-crawl',
     policy_count: snap.policies.items.length,
+    policy_added: policyAdded,
     price_count: (snap.prices && snap.prices.count) || 0,
     price_source: (snap.prices && snap.prices.source) || '',
     price_date: (snap.prices && snap.prices.updated_at_text) || '',
@@ -372,40 +510,37 @@ exports.main = async () => {
   try {
     await db.collection(COLLECTION).doc(DOC_ID).set({ data: doc });
   } catch (e) {
-    // 集合还没建：建一次再写
     await ensureCollection(COLLECTION);
     await db.collection(COLLECTION).doc(DOC_ID).set({ data: doc });
   }
 
+  // 名录单独同步，出问题不影响政策与行情
+  let catalogNote = '';
+  try {
+    const c = await syncCatalog();
+    catalogNote = c.note;
+  } catch (e) {
+    catalogNote = '异常：' + String((e && e.message) || e).slice(0, 60);
+  }
+
   const summary = {
     ok: true,
-    source: srcName,
+    mode: 'local-crawl',
     policies: doc.policy_count,
+    policy_added: policyAdded,
+    policy_sources: policySrcOk + '/' + policySrcAll,
     data_date: doc.data_date,
-    snapshot_stale: stale,
     prices: doc.price_count,
     price_source: doc.price_source,
-    price_date: doc.price_date,
     price_note: priceNote,
-    snapshot_errors: errs,
+    catalog: catalogNote,
+    notes: notes,
     ms: Date.now() - startedAt,
   };
   console.log('sync ok', JSON.stringify(summary));
 
-  // 降级运行要留痕：靠云库续命时接口照样返回 ok，但政策已经停止更新了，
-  // 翻 sync_log 能一眼看出是哪天开始吃老本的。
-  if (stale) {
-    try {
-      await ensureCollection(LOG_COLLECTION);
-      await db.collection(LOG_COLLECTION).add({
-        data: {
-          at: new Date(), ok: false, degraded: true,
-          errors: errs, ms: Date.now() - startedAt,
-        },
-      });
-    } catch (e) {
-      console.error('写降级日志失败', e);
-    }
+  if (policySrcOk === 0 || priceHit === 0) {
+    await logDegraded({ errors: notes, ms: Date.now() - startedAt });
   }
 
   return summary;

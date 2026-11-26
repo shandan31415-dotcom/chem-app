@@ -1,24 +1,29 @@
 /**
  * 云端数据通道（云开发）—— 三级回退，任何一级失败都不影响页面打开。
  *
- *   1. 云数据库 snapshot/latest   ← 云函数每天 06:30 灌一次，最新
+ *   1. 云数据库                   ← 云函数每天跑 4 次，最新
  *   2. 本机缓存（Storage）         ← 上次成功拉到的那份，断网也能用
  *   3. 代码包内静态数据 data/*.js  ← 兜底，永远不会白屏
  *
- * 拉取成功后直接改 core.D 的 policies / prices / meta 三个属性：
- * 页面里都是 `core.D.policies.items` 这种写法，改属性即全局生效，
- * 不需要把数据一层层传下去。页面订阅 onUpdate 后自行重绘即可。
+ * 拉取成功后直接改 core.D 的属性，页面里都是 `core.D.xxx` 这种写法，
+ * 改属性即全局生效。页面订阅 onUpdate 后自行重绘即可。
+ *
+ * 同步三样东西：
+ *   snapshot/latest → 政策 + 参考价 + 数据日期（每天都在变）
+ *   catalog/latest  → 企业与园区名录（月级变化，但协会要能自己改）
+ *
+ * 名录走云库的意义：原来加一家会员企业就得改代码重新发版，
+ * 现在在云开发控制台的数据库里直接改，小程序下拉刷新就生效。
  *
  * 设计约束：
- *   - 只同步「政策 / 参考价 / 数据日期」三类每天都在变的东西。
- *     园区、企业、品类是人工整理的，属于发版内容，不走云端。
- *   - 云端快照的时间戳必须比包内数据新才采用，防止云端落后时把新包覆盖回旧数据。
+ *   - 云端版本必须不比包内旧才采用，防止云端落后时把新包覆盖回旧数据。
  *   - 任何异常都吞掉，只记在 state.error 里，不弹窗、不打断用户。
  */
 const core = require('./core.js');
 const CFG = require('./config.js');
 
 const CACHE_KEY = 'live_snapshot_v1';
+const CATALOG_KEY = 'live_catalog_v1';
 /** 同一次启动内，多少毫秒之内不重复拉（切 tab 回来不重复请求） */
 const MIN_GAP = 10 * 60 * 1000;
 
@@ -31,6 +36,8 @@ const state = {
   rev: 0,
   error: '',
   loading: false,
+  /** 名录来源：'static' | 'cache' | 'cloud' */
+  catalogSource: 'static',
 };
 
 let envInited = false;
@@ -148,6 +155,97 @@ function apply(snap, source) {
   return true;
 }
 
+/* ------------------------------------------------------------ 名录（catalog） */
+
+function validCatalog(c) {
+  if (!c || !Array.isArray(c.cities) || c.cities.length < 5) return false;
+  return c.cities.every((x) => x && x.code && x.name);
+}
+
+function readCatalogCache() {
+  try {
+    if (typeof wx === 'undefined' || !wx.getStorageSync) return null;
+    const raw = wx.getStorageSync(CATALOG_KEY);
+    if (!raw || typeof raw !== 'object') return null;
+    if (!raw._at || Date.now() - raw._at > 7 * 86400 * 1000) return null;
+    return raw.data || null;
+  } catch (e) {
+    return null;
+  }
+}
+
+function writeCatalogCache(data) {
+  try {
+    if (typeof wx !== 'undefined' && wx.setStorageSync) {
+      wx.setStorageSync(CATALOG_KEY, { _at: Date.now(), data: data });
+    }
+  } catch (e) {
+    /* 名录 86KB，个别机型存储紧张时写不进去，不影响当次使用 */
+  }
+}
+
+/**
+ * 名录合并进 core.D.parks。
+ *
+ * 只覆盖 cities / counts / 时间三样，note、source 这些长文本保留包内的，
+ * 免得云端精简版把页脚那段说明弄丢。
+ */
+function applyCatalog(cat, source) {
+  if (!validCatalog(cat)) return false;
+  const prev = core.D.parks || {};
+  const ts = Number(cat.updated_at || 0);
+  const prevTs = Number(prev.updated_at || 0);
+  // 云端比包内旧就忽略；相等时采用云端——协会在控制台手改之后
+  // 往往不会去动 updated_at，相等也必须让云库赢，否则手改永远不生效
+  if (ts && prevTs && ts < prevTs) return false;
+  core.D.parks = Object.assign({}, prev, {
+    updated_at: cat.updated_at || prev.updated_at,
+    updated_at_text: cat.updated_at_text || prev.updated_at_text,
+    counts: cat.counts || prev.counts,
+    cities: cat.cities,
+  });
+  state.catalogSource = source;
+  return true;
+}
+
+/** 拉名录。与主快照并行，失败就用包内数据，不打扰用户 */
+function pullCatalog(env) {
+  if (!hasCloud()) return Promise.resolve(false);
+
+  const cached = readCatalogCache();
+  let changed = false;
+  if (cached && applyCatalog(cached, 'cache')) changed = true;
+
+  return new Promise((resolve) => {
+    let db;
+    try {
+      db = wx.cloud.database({ env: env });
+    } catch (e) {
+      resolve(changed);
+      return;
+    }
+    const timer = setTimeout(() => resolve(changed), 8000);
+    db.collection(CFG.CLOUD_CATALOG_COLLECTION)
+      .doc(CFG.CLOUD_DOC_ID)
+      .get()
+      .then((res) => {
+        clearTimeout(timer);
+        const doc = (res && res.data) || null;
+        const cat = doc && (doc.payload || doc);
+        if (cat && applyCatalog(cat, 'cloud')) {
+          writeCatalogCache(cat);
+          resolve(true);
+        } else {
+          resolve(changed);
+        }
+      })
+      .catch(() => {
+        clearTimeout(timer);
+        resolve(changed);
+      });
+  });
+}
+
 /* ---------------------------------------------------------------- 主体 */
 
 function init() {
@@ -189,6 +287,16 @@ function pull(force) {
 
   init();
   state.loading = true;
+
+  // 名录单独走一条，不耽误主快照；拿到后如果内容变了就让页面重绘一次
+  pullCatalog(env)
+    .then((changed) => {
+      if (changed) {
+        state.rev += 1;
+        emit();
+      }
+    })
+    .catch(() => {});
 
   return new Promise((resolve) => {
     let db;

@@ -34,13 +34,15 @@ const HOLDER = '山东省高端化工产业发展促进会';
 /**
  * 云开发环境 —— 小程序启动后从这里的云数据库读最新数据。
  * 环境 ID 建好后固定不变；留空字符串则完全走代码包内的静态数据（不报错）。
- * 对应云函数：cloudfunctions/syncData（每天 10:10 / 16:10 / 23:50 把最新快照灌进库，
- * 并在快照里的行情过期时自己去抓一次行情，不再完全依赖 GitHub）。
+ * 对应云函数：cloudfunctions/syncData（每天 09:40 / 13:40 / 17:10 / 21:40
+ * 在腾讯云国内机房直接抓政策与行情，抓完写库——不再经过 GitHub）。
  */
 const CLOUD_ENV = 'cloud1-d8gy20yyt95635d5f';
 
 /** 云数据库里放快照的集合名与文档 _id */
 const CLOUD_COLLECTION = 'snapshot';
+/** 企业与园区名录的集合名。协会改名录在云开发控制台的这个集合里改 */
+const CLOUD_CATALOG_COLLECTION = 'catalog';
 const CLOUD_DOC_ID = 'latest';
 
 /** 信息更正入口文案 */
@@ -82,6 +84,7 @@ module.exports = {
   HOLDER,
   CLOUD_ENV,
   CLOUD_COLLECTION,
+  CLOUD_CATALOG_COLLECTION,
   CLOUD_DOC_ID,
   FIX_TITLE,
   FIX_DESC,

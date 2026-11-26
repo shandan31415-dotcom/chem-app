@@ -6,17 +6,22 @@
     {
       "name": "syncMorning",
       "type": "timer",
-      "config": "0 10 10 * * * *"
+      "config": "0 40 9 * * * *"
     },
     {
-      "name": "syncAfternoon",
+      "name": "syncNoon",
       "type": "timer",
-      "config": "0 10 16 * * * *"
+      "config": "0 40 13 * * * *"
+    },
+    {
+      "name": "syncEvening",
+      "type": "timer",
+      "config": "0 10 17 * * * *"
     },
     {
       "name": "syncNight",
       "type": "timer",
-      "config": "0 50 23 * * * *"
+      "config": "0 40 21 * * * *"
     }
   ]
 }
