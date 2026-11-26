@@ -16,6 +16,7 @@ Page({
     stats: null,
     faved: false,
     hasChart: false,
+    histSrc: '',
     disclaimer: core.DISCLAIMER,
   },
 
@@ -52,6 +53,7 @@ Page({
         price: core.px(p.price),
         chg: c.t,
         cls: c.c,
+        src: p.src || '',
         amt:
           p.chg_amt === null || p.chg_amt === undefined
             ? ''
@@ -59,6 +61,7 @@ Page({
       },
       stats,
       hasChart: rows.length > 1,
+      histSrc: this.histSourceOf(name),
       faved: store.has('fav', 'px:' + name),
     });
 
@@ -74,6 +77,11 @@ Page({
   rowsOf(name) {
     const s = core.D.hist && core.D.hist.series ? core.D.hist.series[name] : null;
     return s || [];
+  },
+
+  histSourceOf(name) {
+    const m = (core.D.hist && core.D.hist.sources) || {};
+    return m[name] || '';
   },
 
   onPeriod(e) {

@@ -20,7 +20,7 @@ SRC = os.path.join(os.path.dirname(MINI), "chem-app", "data")
 DST = os.path.join(MINI, "data")
 
 # 行情条目里只保留展示必需字段：剥离 news（内容聚合风险 + 外链打不开）
-PRICE_ITEM_KEYS = ("name", "group", "code", "ex", "price", "chg", "chg_amt")
+PRICE_ITEM_KEYS = ("name", "group", "code", "ex", "price", "chg", "chg_amt", "src")
 
 
 def load(name):
@@ -47,6 +47,7 @@ def slim_prices(p):
     return {
         "updated_at": p.get("updated_at"),
         "updated_at_text": p.get("updated_at_text", ""),
+        "source": p.get("source", ""),
         "count": p.get("count") or sum(len(g["items"]) for g in groups),
         "groups": groups,
     }
@@ -61,7 +62,8 @@ def slim_history(h, keep=250):
     out = {}
     for name, rows in (h.get("series") or {}).items():
         out[name] = [[r[0][5:], r[2]] for r in rows[-keep:]]  # 只留 MM-DD，省字节
-    return {"updated_at": h.get("updated_at"), "series": out}
+    return {"updated_at": h.get("updated_at"), "series": out,
+            "sources": h.get("sources") or {}}
 
 
 def dump_cloud(policies, prices, meta):

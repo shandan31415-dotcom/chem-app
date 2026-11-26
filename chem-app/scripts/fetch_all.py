@@ -317,6 +317,7 @@ def fetch_prices_sina():
                 "code": key[3:].lower(), "secid": "",
                 "ex": SINA_CODE[name][1], "price": price, "chg": chg,
                 "chg_amt": round(price - presettle, 2) if presettle > 0 else None,
+                "src": "新浪财经",
             })
     return rows
 
@@ -364,6 +365,7 @@ def fetch_prices_em():
             "ex": hit["_ex"], "price": px,
             "chg": hit.get("f3") if isinstance(hit.get("f3"), (int, float)) else None,
             "chg_amt": hit.get("f4") if isinstance(hit.get("f4"), (int, float)) else None,
+            "src": "东方财富",
         })
     return rows
 
@@ -431,17 +433,24 @@ def fetch_kline_sina(symbol, lmt=250):
 
 
 def fetch_kline_any(row, lmt=250):
-    """先东财（secid 有值才试），失败再走新浪主连代码。"""
+    """先东财（secid 有值才试），失败再走新浪主连代码。
+
+    实际用了哪个源写回 row["kline_src"]，上层据此在详情页标注。
+    """
     if row.get("secid"):
         try:
             k = fetch_kline(row["secid"], lmt)
             if k:
+                row["kline_src"] = "东方财富"
                 return k
         except Exception:  # noqa: BLE001
             pass
     sc = SINA_CODE.get(row["name"])
     if sc:
-        return fetch_kline_sina(sc[0][3:], lmt)
+        k = fetch_kline_sina(sc[0][3:], lmt)
+        if k:
+            row["kline_src"] = "新浪财经"
+        return k
     return []
 
 
@@ -1492,14 +1501,16 @@ def main():
     if rows:
         hist = load("prices_history.json", {"series": {}})
         series = hist.get("series", {}) if isinstance(hist, dict) else {}
+        ksrc = hist.get("sources", {}) if isinstance(hist, dict) else {}
         for r in rows:
             try:
                 k = fetch_kline_any(r, 250)
                 if k:
                     series[r["name"]] = k
+                    ksrc[r["name"]] = r.get("kline_src") or ""
             except Exception as e:  # noqa: BLE001
                 print("     K线失败 %s: %s" % (r["name"], str(e)[:40]))
-        save("prices_history.json", {"updated_at": now, "series": series})
+        save("prices_history.json", {"updated_at": now, "series": series, "sources": ksrc})
     else:
         save_or_keep("prices_history.json", None, err_p, stamp)
 
@@ -1542,6 +1553,7 @@ def main():
             if sub:
                 groups.append({"name": g, "items": sub})
         save_or_keep("prices.json", {"updated_at": now, "updated_at_text": stamp,
+                                     "source": (rows[0].get("src") or "") if rows else "",
                                      "groups": groups, "count": len(rows)}, None, stamp)
     else:
         save_or_keep("prices.json", None, err_p, stamp)

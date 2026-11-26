@@ -7,6 +7,7 @@ Page({
     groups: [],
     total: 0,
     dataDate: '',
+    priceSource: '',
     disclaimer: core.DISCLAIMER,
   },
 
@@ -62,6 +63,7 @@ Page({
       groups,
       total,
       dataDate: (core.D.prices && core.D.prices.updated_at_text) || '',
+      priceSource: (core.D.prices && core.D.prices.source) || '公开市场报价',
     });
   },
 
