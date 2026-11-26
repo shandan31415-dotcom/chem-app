@@ -9,6 +9,7 @@
  *   node mini/tools/test_sync.js                 # 正常路径
  *   PRICE_STALE_SEC=0 node mini/tools/test_sync.js   # 强制走行情直抓
  *   MOCK_OFFLINE=1 node mini/tools/test_sync.js      # 模拟 GitHub 全挂，验证降级
+ *   CLOUD_NEWER=1 node mini/tools/test_sync.js       # 模拟远程命中 CDN 缓存（比云库旧）
  */
 const path = require('path');
 const fs = require('fs');
@@ -23,6 +24,12 @@ const cloudSnap = JSON.parse(
 );
 // 把行情时间戳改成一天前，确保进入「需要刷新」分支
 if (cloudSnap.prices) cloudSnap.prices.updated_at = Math.floor(Date.now() / 1000) - 86400;
+
+// 模拟「远程源命中了 CDN 缓存，内容比云库还旧」：把云库时间改到未来。
+// 期望结果：source 回落成 cloud-cache，snapshot_stale=true，不拿旧数据覆盖。
+if (process.env.CLOUD_NEWER === '1' && cloudSnap.meta) {
+  cloudSnap.meta.updated_at_text = '2026-12-31 23:59';
+}
 
 let written = null;
 let logged = [];

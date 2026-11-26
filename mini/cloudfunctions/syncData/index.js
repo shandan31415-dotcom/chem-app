@@ -40,25 +40,39 @@ const LOG_COLLECTION = 'sync_log';
  */
 const RAW = 'https://raw.githubusercontent.com/' + REPO + '/' + BRANCH + '/' + FILE;
 
-const SOURCES = [
+/**
+ * 源分两档，这是踩过坑之后的结论。
+ *
+ * jsDelivr 对 GitHub 文件做长期边缘缓存（默认 12 小时，热门资源更久），
+ * 它回得最快，但内容可能是半天前的。之前的「谁先回用谁」让缓存源屡屡抢跑，
+ * 出现过云库里写着 50 条政策、GitHub 上其实已经是 67 条的静默错版。
+ * 所以：先只问「不带长期缓存」的一档，这一档任意一个成功就是最新提交；
+ * 全挂了才退到 CDN 档，并把它标成 stale。
+ */
+const SOURCES_FRESH = [
   {
-    // 自家 CDN，最可信；daily.yml 提交后会主动触发 Pages 重新部署
+    // 自家 Pages，daily.yml 提交后会重新部署；CDN 缓存约 10 分钟量级
     name: 'github-pages',
     url: 'https://shandan31415-dotcom.github.io/chem-app/data/cloud_snapshot.json',
-    timeout: 6000,
+    timeout: 5000,
   },
-  { name: 'github-raw', url: RAW, timeout: 6000 },
-  { name: 'ghfast', url: 'https://ghfast.top/' + RAW, timeout: 6000 },
-  { name: 'gh-proxy', url: 'https://gh-proxy.com/' + RAW, timeout: 6000 },
+  // 代理只做透明转发，不缓存内容
+  { name: 'gh-proxy', url: 'https://gh-proxy.com/' + RAW, timeout: 5000 },
+  { name: 'ghfast', url: 'https://ghfast.top/' + RAW, timeout: 5000 },
+  { name: 'github-raw', url: RAW, timeout: 5000 },
+];
+
+/** 带长期缓存的源，仅兜底 */
+const SOURCES_CDN = [
   {
     name: 'jsdelivr-gcore',
     url: 'https://gcore.jsdelivr.net/gh/' + REPO + '@' + BRANCH + '/' + FILE,
-    timeout: 6000,
+    timeout: 5000,
   },
   {
     name: 'jsdelivr',
     url: 'https://cdn.jsdelivr.net/gh/' + REPO + '@' + BRANCH + '/' + FILE,
-    timeout: 6000,
+    timeout: 5000,
   },
 ];
 
@@ -271,40 +285,60 @@ async function loadCloudSnap() {
   }
 }
 
+/** 快照的时间戳，形如 2026-11-26 10:08，定长可直接比大小 */
+function stampOf(snap) {
+  return (snap && snap.meta && snap.meta.updated_at_text) || '';
+}
+
 exports.main = async () => {
   const startedAt = Date.now();
+  const cloudSnap = await loadCloudSnap();
+
   let hit = null;
   let errs = [];
-  try {
-    hit = await raceOk(SOURCES);
-  } catch (errors) {
-    errs = Array.isArray(errors) ? errors : [String(errors)];
-    console.warn('快照源全部失败，尝试用云库里的旧快照续行情', errs.join(' | '));
+  for (const group of [SOURCES_FRESH, SOURCES_CDN]) {
+    try {
+      hit = await raceOk(group);
+      break;
+    } catch (errors) {
+      errs = errs.concat(Array.isArray(errors) ? errors : [String(errors)]);
+    }
   }
 
   let snap;
   let srcName;
   let srcUrl = '';
+  let stale = false;
   if (hit) {
     snap = hit.snap;
     srcName = hit.source;
     srcUrl = hit.url;
-  } else {
+    // 远程比云库还旧，说明命中了 CDN 缓存，或者 Pages 还没部署完。
+    // 云库那份是上一轮写进去的，用云库，别把旧数据当新的又写一遍。
+    if (cloudSnap && stampOf(hit.snap) && stampOf(hit.snap) < stampOf(cloudSnap)) {
+      errs.push(
+        hit.source + ' 内容滞后（' + stampOf(hit.snap) + ' < 云库 ' + stampOf(cloudSnap) + '），改用云库'
+      );
+      snap = cloudSnap;
+      srcName = 'cloud-cache';
+      stale = true;
+    }
+  } else if (cloudSnap) {
     // GitHub 那条链断了≠整个应用停摆：云库里还有一份昨天的快照，
     // 政策旧几天没关系，价格继续由我们自己去抓，用户看到的仍是最新价。
-    snap = await loadCloudSnap();
+    snap = cloudSnap;
     srcName = 'cloud-cache';
-    if (!snap) {
-      try {
-        await ensureCollection(LOG_COLLECTION);
-        await db.collection(LOG_COLLECTION).add({
-          data: { at: new Date(), ok: false, errors: errs, ms: Date.now() - startedAt },
-        });
-      } catch (e) {
-        console.error('写日志失败', e);
-      }
-      return { ok: false, errors: errs, ms: Date.now() - startedAt };
+    stale = true;
+  } else {
+    try {
+      await ensureCollection(LOG_COLLECTION);
+      await db.collection(LOG_COLLECTION).add({
+        data: { at: new Date(), ok: false, errors: errs, ms: Date.now() - startedAt },
+      });
+    } catch (e) {
+      console.error('写日志失败', e);
     }
+    return { ok: false, errors: errs, ms: Date.now() - startedAt };
   }
 
   // 快照里的行情是 GitHub 那边采的。它一旦因为境外 IP 被拦就会停更，
@@ -348,6 +382,7 @@ exports.main = async () => {
     source: srcName,
     policies: doc.policy_count,
     data_date: doc.data_date,
+    snapshot_stale: stale,
     prices: doc.price_count,
     price_source: doc.price_source,
     price_date: doc.price_date,
@@ -357,9 +392,9 @@ exports.main = async () => {
   };
   console.log('sync ok', JSON.stringify(summary));
 
-  // 降级运行要留痕：快照源全挂时虽然接口返回 ok，但政策已经停止更新了，
-  // 翻 sync_log 能一眼看出是哪天开始靠云库续命的。
-  if (!hit) {
+  // 降级运行要留痕：靠云库续命时接口照样返回 ok，但政策已经停止更新了，
+  // 翻 sync_log 能一眼看出是哪天开始吃老本的。
+  if (stale) {
     try {
       await ensureCollection(LOG_COLLECTION);
       await db.collection(LOG_COLLECTION).add({
