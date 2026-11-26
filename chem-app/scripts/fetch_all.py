@@ -377,15 +377,19 @@ def fetch_prices():
         rows = fetch_prices_em()
     except Exception as e:  # noqa: BLE001
         print("  [!] 东财行情失败: %s" % str(e)[:60])
-    if len(rows) >= 15:
-        return rows
-    try:
-        alt = fetch_prices_sina()
-        print("     新浪兜底行情 %d 条（东财 %d 条）" % (len(alt), len(rows)))
-        if len(alt) > len(rows):
-            return alt
-    except Exception as e:  # noqa: BLE001
-        print("  [!] 新浪行情也失败: %s" % str(e)[:60])
+
+    # 东财通的时候也会缺品种（低硫燃料油它就没有），缺哪个拿新浪补哪个。
+    # 不补的话品种会随数据源时有时无，用户看到列表里少一行只觉得是 bug。
+    have = set(r["name"] for r in rows)
+    if len(have) < len(PRODUCTS):
+        try:
+            alt = fetch_prices_sina()
+            added = [r for r in alt if r["name"] not in have]
+            if added:
+                print("     新浪补 %d 个品种（东财已给 %d 条）" % (len(added), len(rows)))
+            rows.extend(added)
+        except Exception as e:  # noqa: BLE001
+            print("  [!] 新浪行情失败: %s" % str(e)[:60])
     return rows
 
 
@@ -1595,8 +1599,14 @@ def main():
                 sub.append(r2)
             if sub:
                 groups.append({"name": g, "items": sub})
+        # 可能混源（东财为主、新浪补缺），按出现顺序去重罗列，页面上如实标注
+        srcs = []
+        for r in rows:
+            s = r.get("src") or ""
+            if s and s not in srcs:
+                srcs.append(s)
         save_or_keep("prices.json", {"updated_at": now, "updated_at_text": stamp,
-                                     "source": (rows[0].get("src") or "") if rows else "",
+                                     "source": " + ".join(srcs),
                                      "groups": groups, "count": len(rows)}, None, stamp)
     else:
         save_or_keep("prices.json", None, err_p, stamp)
