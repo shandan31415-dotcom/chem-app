@@ -1,1 +1,29 @@
 /* 政策列表沿用全局 .row / .tag，无需额外样式 */
+
+/* 周报入口 */
+.wk-entry {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 16px;
+  background: #f7fbf9;
+  border: 1px solid rgba(31, 111, 92, 0.14);
+}
+
+.we-l {
+  flex: 1;
+  min-width: 0;
+}
+
+.we-t {
+  font-size: 15px;
+  font-weight: 500;
+  color: #1f6f5c;
+}
+
+.we-s {
+  font-size: 11.5px;
+  color: var(--c-sub, #6b7785);
+  margin-top: 3px;
+  line-height: 1.5;
+}

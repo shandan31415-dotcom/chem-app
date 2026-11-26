@@ -25,6 +25,7 @@ Page({
     levels: [],
     list: [],
     resultCount: 0,
+    weeklyCount: 0,
     fromCloud: false,
     disclaimer: core.DISCLAIMER,
   },
@@ -73,15 +74,30 @@ Page({
     })).filter((x) => x.count > 0);
 
     const st = live.ready();
+    // 周报入口上的数字：本周一以来新增几条（周记为一周之始）
+    const now = Math.floor(Date.now() / 1000);
+    const d = new Date();
+    d.setHours(0, 0, 0, 0);
+    const weekStart = Math.floor(d.getTime() / 1000) - ((d.getDay() + 6) % 7) * 86400;
+    let weeklyCount = items.filter((p) => (p.ts || 0) >= weekStart).length;
+    if (weeklyCount < 3) {
+      weeklyCount = items.filter((p) => (p.ts || 0) >= now - 7 * 86400).length;
+    }
+
     this.setData({
       levels,
       levelCount: lc,
       tagList,
+      weeklyCount,
       tag: tagList.some((x) => x.t === this.data.tag) ? this.data.tag : '',
       fromCloud: st.source === 'cloud' || st.source === 'cache',
       updatedText: (core.D.policies && core.D.policies.updated_at_text) || '',
     });
     this.paint();
+  },
+
+  goWeekly() {
+    wx.navigateTo({ url: '/pages/weekly/weekly' });
   },
 
   paint() {

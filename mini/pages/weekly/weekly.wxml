@@ -1,0 +1,45 @@
+<view class="wrap">
+
+  <view class="card wk-hd">
+    <view class="wk-l">{{rangeText}}新增</view>
+    <view class="wk-n">{{total}}<text class="wk-u">条</text></view>
+    <view class="wk-r">{{startText}} ~ {{endText}}</view>
+    <view class="wk-s" wx:if="{{total}}">按主题分了 {{groups.length}} 组，同一文件可能出现在多个主题下</view>
+    <view class="wk-s" wx:else>这段时间确实没有新文件发布，不是采集停了</view>
+  </view>
+
+  <view class="wk-acts">
+    <view class="wk-btn" bindtap="copyText">复制本周清单</view>
+    <button class="wk-btn share" open-type="share">转发给会员</button>
+  </view>
+
+  <block wx:for="{{groups}}" wx:key="title">
+    <view class="sec-title">{{item.title}} <text class="subtle">· {{item.count}} 条</text></view>
+    <view class="card">
+      <view class="row" wx:for="{{item.items}}" wx:for-item="p" wx:key="id"
+            data-id="{{p.id}}" bindtap="go">
+        <view class="main">
+          <view class="rt">{{p.title}}</view>
+          <view class="rm">
+            <text class="tag">{{p.level}}</text>
+            <text>{{p.org}}</text>
+            <text>{{p.date}}</text>
+          </view>
+        </view>
+        <text class="arrow">›</text>
+      </view>
+      <view class="row wk-more" wx:if="{{item.more}}">
+        <view class="main">还有 {{item.more}} 条，去政策页看</view>
+        <text class="arrow">›</text>
+      </view>
+    </view>
+  </block>
+
+  <view class="hint">
+    本页按发文日期归拢政策，<text wx:if="{{updatedText}}">数据截至 {{updatedText}}。</text>
+    只做索引与归类，不代替原文：涉及申报、验收、处罚的，一律以政府网站原文和主管部门口径为准。
+  </view>
+
+  <view class="disclaimer">{{disclaimer}}</view>
+
+</view>

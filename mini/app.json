@@ -12,7 +12,8 @@
     "pages/board/board",
     "pages/chain/chain",
     "pages/price/price",
-    "pages/policy/policy"
+    "pages/policy/policy",
+    "pages/weekly/weekly"
   ],
   "window": {
     "backgroundTextStyle": "light",

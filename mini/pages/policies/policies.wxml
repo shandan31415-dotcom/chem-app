@@ -1,5 +1,13 @@
 <view class="wrap">
 
+  <view class="card wk-entry" bindtap="goWeekly">
+    <view class="we-l">
+      <view class="we-t">政策周报</view>
+      <view class="we-s">{{weeklyCount ? '近期新增 ' + weeklyCount + ' 条，按主题整理，可转发或复制成清单' : '按主题整理，可转发或复制成清单'}}</view>
+    </view>
+    <text class="arrow">›</text>
+  </view>
+
   <view class="card searchbox">
     <view class="sbar">
       <text class="sic">⌕</text>

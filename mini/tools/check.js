@@ -57,7 +57,9 @@ jsonFiles.forEach((f) => {
 });
 
 /* 3. WXML */
-const BANNED = ['div', 'span', 'a', 'b', 'i', 'p', 'ul', 'li', 'br', 'h1', 'h2', 'h3', 'section', 'header', 'nav', 'main', 'img', 'button'];
+/* button 不在禁用表里：它确实是小程序原生组件，而 open-type="share"
+   只能挂在 button 上——转发按钮绕不过去。其余几个是 HTML 标签，一律不用。 */
+const BANNED = ['div', 'span', 'a', 'b', 'i', 'p', 'ul', 'li', 'br', 'h1', 'h2', 'h3', 'section', 'header', 'nav', 'main', 'img'];
 const SELF_CLOSING = ['image', 'icon', 'progress', 'switch', 'slider', 'checkbox', 'radio', 'textarea'];
 
 wxmlFiles.forEach((f) => {
