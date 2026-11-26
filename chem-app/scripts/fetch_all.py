@@ -1137,6 +1137,16 @@ POLICY_SOURCES = [
      "med": ["园区", "建设项目", "环境影响评价", "排污许可", "危险废物", "固体废物",
              "名录", "新污染物", "两高", "碳排放", "产能"],
      "pattern": r'href="([^"]*?/t\d{8}_\d+\.s?html)"[^>]*>\s*([^<]{8,90}?)\s*</a>'},
+    # 工信部原材料工业司：石化化工的主管司局。老旧装置更新改造、精细化工揭榜挂帅、
+    # 石化化工行业规范条件这类直接管到装置的部委文件都在这儿，省厅栏目里不会重复出现。
+    {"level": "国家级", "org": "工业和信息化部原材料工业司", "paginate": "html",
+     "url": "https://www.miit.gov.cn/jgsj/ycls/index.html", "pages": 1,
+     "pattern": r'href="([^"]*?/art/\d{4}/art_[0-9a-f]+\.html)"[^>]*?title="([^"]{8,90})"'},
+    # 省发改委规范性文件：能耗审查、碳排放评价、产能置换这些「能不能上项目」的口径
+    # 都在这。列表自带「有效/废止/失效」状态，抓下来正好补政策失效标记。
+    {"level": "山东省", "org": "山东省发展和改革委员会", "paginate": "html", "industry": True,
+     "url": "http://fgw.shandong.gov.cn/col/col333896/index.html", "pages": 1,
+     "pattern": r'href="([^"]*?/art/\d{4}/\d{1,2}/\d{1,2}/art_\d+_\d+\.html)"[^>]*>\s*([^<]{8,90}?)\s*</a>'},
 ]
 
 
@@ -1234,6 +1244,30 @@ def policy_impact(title):
     return ""
 
 
+# 主题标签：会员查政策时不会从「发文机关」开始找，而是"最近有没有绿色工厂的活"
+# "碳市场又出什么了"。一条文件可以同时命中多个标签，前端按标签筛。
+POLICY_TAGS = [
+    ("绿色低碳", ["绿色工厂", "绿色制造", "绿色工业园区", "绿色供应链", "零碳", "近零碳",
+                 "节能", "能效", "降碳", "碳达峰", "双碳", "绿电", "绿证", "清洁生产",
+                 "循环经济", "资源综合利用", "再生资源", "节能审查", "碳排放评价",
+                 "领跑者", "低碳", "绿色化"]),
+    ("碳市场", ["碳市场", "碳排放权", "碳交易", "碳配额", "碳足迹", "碳标签", "碳关税",
+               "CBAM", "CCER", "自愿减排", "碳汇", "碳核算", "碳排放"]),
+    ("安全环保", ["危险化学品", "危化", "安全生产", "排污", "环评", "环境影响评价",
+                 "危险废物", "固废", "固体废物", "新污染物", "污染防治", "环境管理",
+                 "应急", "事故", "环保", "超低排放", "土壤污染", "化学物质",
+                 "生态环境标准", "环境标准"]),
+    ("产业政策", ["产业结构", "产能置换", "产能", "园区", "扩区", "新材料", "技改",
+                 "技术改造", "数字化转型", "智能制造", "揭榜挂帅", "规范条件", "准入",
+                 "目录", "规划", "计划", "实施方案", "行动方案",
+                 "奖补", "标杆", "稳增长", "清单", "储备", "保供", "审批", "投资"]),
+]
+
+
+def policy_tags(title):
+    return [name for name, kws in POLICY_TAGS if any(k in title for k in kws)]
+
+
 def resolve_policy_url(h, src):
     """把列表页里的相对链接还原成能直接打开的绝对地址。
 
@@ -1301,6 +1335,9 @@ def fetch_policies(prev=None):
             except Exception as e:  # noqa: BLE001
                 print("  [!] 政策源失败 %s 第%d页: %s" % (src["org"], i + 1, str(e)[:50]))
                 break
+            # 有的站把 title 写成 title="<!--articletitle-->"，注释里的 > 会把
+            # 「href 到 >」的匹配提前截断，标题里就会混进 "> 这种脏字符。先摘掉注释。
+            s = re.sub(r"<!--.*?-->", "", s, flags=re.S)
             for h, t in re.findall(src["pattern"], s):
                 title = clean(t)
                 if not title or len(title) < 8 or title in seen_title:
@@ -1315,7 +1352,8 @@ def fetch_policies(prev=None):
                 fresh.append({"id": "", "title": title, "url": url,
                               "level": src["level"], "org": src["org"],
                               "ts": date_from_url(url),
-                              "impact": policy_impact(title), "impact_src": "rule"})
+                              "impact": policy_impact(title), "impact_src": "rule",
+                              "tags": policy_tags(title)})
                 got += 1
         print("     %s %s: 新增 %d 条" % (src["level"], src["org"], got))
 
@@ -1345,6 +1383,11 @@ def fetch_policies(prev=None):
     if len(dated) != len(out):
         print("     [!] %d 条无日期，暂不展示" % (len(out) - len(dated)))
     out = dated
+
+    # 标签由标题推导，每次全量重算：规则一改，历史条目跟着变，
+    # 不会出现「新文件有标签、老文件没标签」的割裂
+    for x in out:
+        x["tags"] = policy_tags(x.get("title") or "")
 
     def _doc_key(t):
         m = re.search(r"《([^》]{6,})》", t)

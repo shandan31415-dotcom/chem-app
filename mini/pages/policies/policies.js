@@ -12,11 +12,15 @@ const POL_SYN = {
   投资: ['项目', '备案', '核准', '审批'],
 };
 
+const TAG_ORDER = ['绿色低碳', '碳市场', '安全环保', '产业政策'];
+
 Page({
   data: {
     q: '',
     level: '国家级',
     levelCount: { '国家级': 0, '山东省': 0 },
+    tag: '',
+    tagList: [],
     updatedText: '',
     levels: [],
     list: [],
@@ -60,10 +64,20 @@ Page({
     }));
     const lc = { '国家级': 0, '山东省': 0 };
     items.forEach((p) => { lc[p.level] = (lc[p.level] || 0) + 1; });
+
+    // 主题标签：只列出当前层级里真实存在的，数量为 0 的不占位置
+    const scope = items.filter((p) => p.level === this.data.level);
+    const tagList = TAG_ORDER.map((t) => ({
+      t,
+      count: scope.filter((p) => (p.tags || []).indexOf(t) >= 0).length,
+    })).filter((x) => x.count > 0);
+
     const st = live.ready();
     this.setData({
       levels,
       levelCount: lc,
+      tagList,
+      tag: tagList.some((x) => x.t === this.data.tag) ? this.data.tag : '',
       fromCloud: st.source === 'cloud' || st.source === 'cache',
       updatedText: (core.D.policies && core.D.policies.updated_at_text) || '',
     });
@@ -85,7 +99,10 @@ Page({
         return words.some((ws) => ws.some((w) => w && hay.indexOf(w) >= 0));
       });
     } else {
-      list = items.filter((p) => p.level === this.data.level);
+      const tag = this.data.tag;
+      list = items.filter(
+        (p) => p.level === this.data.level && (!tag || (p.tags || []).indexOf(tag) >= 0)
+      );
     }
 
     this.setData({
@@ -95,6 +112,7 @@ Page({
         title: p.title,
         org: p.org || '',
         level: p.level || '',
+        tags: p.tags || [],
         date: p.date || core.dateStr(p.ts),
         read: store.has('read', 'pol:' + p.id),
       })),
@@ -110,7 +128,12 @@ Page({
   },
 
   onLevel(e) {
-    this.setData({ level: e.currentTarget.dataset.lv, q: '' }, () => this.paint());
+    this.setData({ level: e.currentTarget.dataset.lv, q: '', tag: '' }, () => this.rebuild());
+  },
+
+  onTag(e) {
+    const t = e.currentTarget.dataset.t;
+    this.setData({ tag: this.data.tag === t ? '' : t }, () => this.paint());
   },
 
   go(e) {
